@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/${RAG_POSTGRES_DB:ragdb}
+    username: ${RAG_POSTGRES_USER:rag_app}
+    password: ${RAG_POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    create-schemas: true
+    schemas: rag
+    default-schema: rag
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: rag
+    open-in-view: false
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-v4-flash-vision-exp
+          temperature: 0.2
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+app:
+  storage:
+    local-path: storage/documents
+    max-file-size-bytes: 52428800
