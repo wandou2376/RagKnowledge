@@ -10,6 +10,7 @@ import com.itdou.ragknowledgesystem.document.storage.FileStorage;
 import com.itdou.ragknowledgesystem.document.storage.LocalStorageProperties;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
 import com.itdou.ragknowledgesystem.knowledgebase.repository.KnowledgeBaseRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,6 +25,7 @@ import java.util.UUID;
 
 @Service
 @Transactional
+@Slf4j
 public class DocumentServiceImpl implements DocumentService {
 
     private static final int PDF_HEADER_SCAN_SIZE = 1_024;
@@ -48,16 +50,28 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public DocumentResponse upload(UUID knowledgeBaseId, MultipartFile file) {
+        log.info("收到文档上传请求 knowledgeBaseId={} fileName={} size={} 字节",
+                knowledgeBaseId,
+                file == null ? null : file.getOriginalFilename(),
+                file == null ? null : file.getSize());
+
         ensureKnowledgeBaseExists(knowledgeBaseId);
         validatePdf(file);
+        log.debug("文件校验通过 fileName={} mediaType={}", file.getOriginalFilename(), file.getContentType());
 
         //检查重复文件，JPA会根据方法名进行查询
         String fileHash = calculateSha256(file);
+        log.debug("文件哈希计算完成 fileName={} fileHash={}", file.getOriginalFilename(), fileHash);
+
         if (documentRepository.existsByKnowledgeBaseIdAndFileHash(knowledgeBaseId, fileHash)) {
+            log.warn("知识库中已存在相同文件，拒绝上传 knowledgeBaseId={} fileName={} fileHash={}",
+                    knowledgeBaseId, file.getOriginalFilename(), fileHash);
             throw new DuplicateDocumentException();
         }
 
         String storageKey = fileStorage.storePdf(file);//存储路径
+        log.info("原文件已保存 storageKey={}", storageKey);
+
         try {
             Document document = Document.pending(
                     knowledgeBaseId,
@@ -67,13 +81,18 @@ public class DocumentServiceImpl implements DocumentService {
                     file.getSize(),
                     fileHash
             );
-            return toResponse(documentRepository.saveAndFlush(document));
+            DocumentResponse response = toResponse(documentRepository.saveAndFlush(document));
+            log.info("文档记录已创建 documentId={} parseStatus={}（等待调用解析接口）",
+                    response.id(), response.parseStatus());
+            return response;
         } catch (RuntimeException exception) {
-            // Do not retain a local file when the database record cannot be created.
+            // 数据库记录没建成，就不要把文件留在磁盘上
+            log.error("文档入库失败，回滚已保存的物理文件 storageKey={}", storageKey, exception);
             try {
                 fileStorage.delete(storageKey);
-            } catch (RuntimeException ignored) {
-                // The original persistence exception is more useful to the caller.
+            } catch (RuntimeException rollbackFailure) {
+                // 回滚失败只记日志：抛原始异常对调用方排查更有价值
+                log.warn("回滚物理文件也失败了，需要手工清理 storageKey={}", storageKey, rollbackFailure);
             }
             throw exception;
         }
@@ -83,34 +102,48 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public List<DocumentResponse> listByKnowledgeBaseId(UUID knowledgeBaseId) {
+        log.debug("查询知识库文档列表 knowledgeBaseId={}", knowledgeBaseId);
+
         ensureKnowledgeBaseExists(knowledgeBaseId);
-        return documentRepository.findByKnowledgeBaseIdOrderByCreatedAtDesc(knowledgeBaseId)
+        List<DocumentResponse> documents = documentRepository
+                .findByKnowledgeBaseIdOrderByCreatedAtDesc(knowledgeBaseId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
+
+        log.info("查询知识库文档列表完成 knowledgeBaseId={} 共 {} 条", knowledgeBaseId, documents.size());
+        return documents;
     }
 
     //查询单个文档
     @Override
     @Transactional(readOnly = true)
     public DocumentResponse getById(UUID documentId) {
+        log.debug("查询文档详情 documentId={}", documentId);
+
         return toResponse(findById(documentId));
     }
 
     //删除文档
     @Override
     public void delete(UUID documentId) {
+        log.info("删除文档 documentId={}", documentId);
+
         Document document = findById(documentId);
 
-        // Flush first so a database failure does not delete a still-referenced local file.
+        // 先 flush 再删物理文件：数据库删失败时，文件必须还在，否则会出现记录还在但文件没了
         documentRepository.delete(document);
         documentRepository.flush();
+        log.debug("文档记录已删除，开始清理物理文件 storageKey={}", document.getStorageKey());
+
         fileStorage.delete(document.getStorageKey());
+        log.info("文档删除完成 documentId={}", documentId);
     }
 
     //检查知识库是否存在
     private void ensureKnowledgeBaseExists(UUID knowledgeBaseId) {
         if (!knowledgeBaseRepository.existsById(knowledgeBaseId)) {
+            log.warn("知识库不存在，操作被拒绝 knowledgeBaseId={}", knowledgeBaseId);
             throw new KnowledgeBaseNotFoundException(knowledgeBaseId);
         }
     }
@@ -123,16 +156,17 @@ public class DocumentServiceImpl implements DocumentService {
     //校验PDF
     private void validatePdf(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new InvalidDocumentException("file must not be empty");
+            throw new InvalidDocumentException("上传文件不能为空");
         }
         if (file.getSize() > maxFileSizeBytes) {
-            throw new InvalidDocumentException("file exceeds the maximum allowed size");
+            log.warn("上传文件超过大小上限 size={} 字节 上限={} 字节", file.getSize(), maxFileSizeBytes);
+            throw new InvalidDocumentException("上传文件超过大小上限");
         }
         if (!originalFileName(file).toLowerCase().endsWith(".pdf")) {
-            throw new InvalidDocumentException("only PDF files are supported");
+            throw new InvalidDocumentException("只支持 PDF 格式的文件");
         }
         if (!hasPdfHeader(file)) {
-            throw new InvalidDocumentException("uploaded content is not a valid PDF file");
+            throw new InvalidDocumentException("上传内容不是有效的 PDF 文件");
         }
     }
 
@@ -148,7 +182,8 @@ public class DocumentServiceImpl implements DocumentService {
             }
             return false;
         } catch (IOException exception) {
-            throw new InvalidDocumentException("failed to read uploaded file");
+            log.error("读取上传文件内容失败 fileName={}", file.getOriginalFilename(), exception);
+            throw new InvalidDocumentException("读取上传文件失败");
         }
     }
 
@@ -163,7 +198,8 @@ public class DocumentServiceImpl implements DocumentService {
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (IOException | NoSuchAlgorithmException exception) {
-            throw new InvalidDocumentException("failed to calculate file hash");
+            log.error("计算文件哈希失败 fileName={}", file.getOriginalFilename(), exception);
+            throw new InvalidDocumentException("计算文件哈希失败");
         }
     }
 
@@ -172,7 +208,8 @@ public class DocumentServiceImpl implements DocumentService {
         String originalFileName = file.getOriginalFilename();
         if (originalFileName == null || originalFileName.isBlank()
                 || originalFileName.contains("..") || originalFileName.contains("/") || originalFileName.contains("\\")) {
-            throw new InvalidDocumentException("invalid original file name");
+            log.warn("非法的原始文件名，拒绝上传 fileName={}", originalFileName);
+            throw new InvalidDocumentException("原始文件名不合法");
         }
         return originalFileName;
     }

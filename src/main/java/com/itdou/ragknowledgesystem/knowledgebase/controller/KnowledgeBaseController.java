@@ -1,5 +1,6 @@
 package com.itdou.ragknowledgesystem.knowledgebase.controller;
 
+import com.itdou.ragknowledgesystem.common.response.Result;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.CreateKnowledgeBaseRequest;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.KnowledgeBaseResponse;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.UpdateKnowledgeBaseRequest;
@@ -30,34 +31,38 @@ public class KnowledgeBaseController {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
+    // 创建成功返回 201，Location 头指向新资源，body 同样是 Result 信封
     @PostMapping
-    public ResponseEntity<KnowledgeBaseResponse> create(@Valid @RequestBody CreateKnowledgeBaseRequest request) {
+    public ResponseEntity<Result<KnowledgeBaseResponse>> create(
+            @Valid @RequestBody CreateKnowledgeBaseRequest request
+    ) {
         KnowledgeBaseResponse response = knowledgeBaseService.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(response.id())
                 .toUri();
-        return ResponseEntity.created(location).body(response);
+        return ResponseEntity.created(location).body(Result.success(response));
     }
 
     @GetMapping
-    public List<KnowledgeBaseResponse> list() {
-        return knowledgeBaseService.list();
+    public Result<List<KnowledgeBaseResponse>> list() {
+        return Result.success(knowledgeBaseService.list());
     }
 
     @GetMapping("/{id}")
-    public KnowledgeBaseResponse getById(@PathVariable UUID id) {
-        return knowledgeBaseService.getById(id);
+    public Result<KnowledgeBaseResponse> getById(@PathVariable UUID id) {
+        return Result.success(knowledgeBaseService.getById(id));
     }
 
     @PutMapping("/{id}")
-    public KnowledgeBaseResponse update(
+    public Result<KnowledgeBaseResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateKnowledgeBaseRequest request
     ) {
-        return knowledgeBaseService.update(id, request);
+        return Result.success(knowledgeBaseService.update(id, request));
     }
 
+    // 删除保持 204 No Content：这是 11 个接口里唯一不返回信封的例外，前端拦截器需要处理无 body 的情况
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         knowledgeBaseService.delete(id);

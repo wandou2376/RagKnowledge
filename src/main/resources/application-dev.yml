@@ -35,3 +35,20 @@ app:
   storage:
     local-path: storage/documents
     max-file-size-bytes: 52428800
+  chunking:
+    # 单个分块的目标大小（token），建议 500~800
+    target-tokens: 600
+    # 相邻分块的重叠 token 数
+    overlap-tokens: 80
+    # 尾块小于该值时并入上一块
+    min-chunk-tokens: 120
+    # 同一行出现在多大比例的页面上就判定为页眉页脚
+    boilerplate-page-ratio: 0.6
+    # 页数少于该值时不做页眉页脚剔除
+    boilerplate-min-pages: 3
+
+logging:
+  level:
+    # 开发环境打开本项目包的 DEBUG，能看到每一步的细节（逐页提取、逐块生成等）。
+    # 嫌吵就把这一行删掉，只保留 INFO 级别的操作日志。
+    com.itdou.ragknowledgesystem: DEBUG

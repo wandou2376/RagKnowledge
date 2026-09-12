@@ -136,7 +136,7 @@ DELETE /api/knowledge-bases/{id}
 - 删除返回 `204 No Content`。
 - Entity、DTO、Service、Repository、Controller 分层清晰。
 
-### 阶段 2：文档上传和元数据管理（实现完成，待本地联调）
+### 阶段 2：文档上传和元数据管理（已完成）
 
 第一版只支持 PDF，文件保存到项目根目录的 `storage/documents`，数据库只保存元数据。
 
@@ -170,7 +170,9 @@ DELETE /api/documents/{documentId}
 - 非 PDF 文件返回 `400`。
 - 删除文档时清理数据库记录和物理文件。
 
-### 阶段 3：PDF 解析和 Chunking
+以上标准已通过真实 HTTP 请求逐条验证，并核对了 `rag.document` 与 `storage/documents`。
+
+### 阶段 3：PDF 解析和 Chunking（已完成，核心流程）
 
 使用 PDFBox 逐页提取文本，保存页码，再按段落和 Token 长度分块。
 
@@ -188,6 +190,29 @@ PDF
 第一版建议使用固定长度分块，例如 500~800 Token，并保留少量 overlap。后续再根据标题层级、表格和代码块进行结构化分块。
 
 扫描版 PDF 或文本提取为空的页面，再渲染成图片交给 DeepSeek 视觉模型处理。
+
+#### 本阶段已实现
+
+接口：
+
+```text
+POST   /api/documents/{documentId}/parse     解析并写入分块，同步执行
+GET    /api/documents/{documentId}/chunks    查看该文档的分块结果
+```
+
+- 按页提取：PDFBox 3.0.8 逐页提取，页码取自物理页序（从 1 开始），开启按坐标排序保证阅读顺序。
+- 文本清洗：压缩连续空白；把数字归一化后统计，出现在 60% 以上页面顶部或底部的行判定为重复页眉页脚并剔除。页数少于 3 页时跳过该判定，避免样本太小误杀正文。
+- 分块：以「行」为最小单位打包，目标 600 token、重叠 80 token，尾块不足 120 token 并入上一块；单行本身就超长时按 token 二分硬切。参数在 `app.chunking` 下可调。
+- 元数据：每个分块保存页码区间、SHA-256 内容哈希、token 数；同一知识库内按 `content_hash` 去重，重复内容跳过不写入。
+- 幂等：重复解析同一文档会先清空旧分块再写入，不会产生重复数据。
+
+验证结果：一份 6 页真实 PDF 得到 5 个分块，token 数为 603 / 608 / 617 / 612 / 608，页码区间为 1-1 / 1-3 / 3-4 / 4-5 / 5-6，与 `rag.document_chunk` 记录一致；重复解析后仍为 5 块。
+
+#### 留待后续
+
+- **结构化分块未实现**：按标题层级、表格、代码块切分属于后续迭代，`section_title` 列已保留但当前恒为 `null`。
+- **扫描版 PDF 兜底未实现**：当前行为是提取不到任何文本时返回 `422 DOCUMENT_PARSING_FAILED`，并把文档置为 `FAILED` 且写入 `error_message`。渲染页面图片交给视觉模型识别的能力尚未开发。
+- **解析是同步接口**：大文件会阻塞请求。异步任务、失败重试和 `ingestion_task` 表的实际使用按计划放在阶段 8。
 
 ### 阶段 4：Embedding 和 PGVector 检索
 
@@ -270,6 +295,16 @@ conversationId
 - Actuator、Prometheus、Grafana 监控。
 - MinIO 对象存储。
 - Docker Compose 部署和生产配置分离。
+
+### 阶段之外的横向改动（已完成）
+
+这些不属于某一个阶段，但已经落地，后续写新接口都要遵守：
+
+- **统一响应格式**：所有接口返回 `Result` 信封 `{code, message, data}`，同时保留真实的 HTTP 状态码。错误响应唯一出口是 `GlobalExceptionHandler`，新增自定义异常必须同步加 `@ExceptionHandler`。两个删除接口返回 `204` 且无 body，是唯一的例外。面向用户的消息统一用中文，`code` 保持英文常量。
+- **日志规范**：全部改用 Lombok `@Slf4j`，按「业务边界 `info` / 明细 `debug` / 可恢复 `warn` / 失败 `error`」分级，每个业务操作覆盖开始、关键步骤和结果；开发环境在本项目包下开到 `debug`。
+- **接口契约测试**：Controller 层补了 `@WebMvcTest` 切片测试，覆盖 11 个接口的成功路径和 9 类错误路径，不需要数据库。
+
+具体约定见 `AGENTS.md`（该文件只保留在本地，未提交到仓库）。
 
 ## 6. 可优化和升级方向
 
@@ -393,15 +428,25 @@ API Key 和数据库密码只放在本地 `.env` 或环境变量中，不要写�
 
 ## 10. 当前下一步
 
-知识库 CRUD 和第一版本地 PDF 上传已完成，下一项是对上传链路进行本地联调，然后进入 PDF 解析和自动分块：
+阶段 2 的上传链路和阶段 3 的解析分块都已联调通过，下一步是阶段 4 的 Embedding 与 PGVector 检索。
+
+**开工前必须先定下来的事：Embedding 模型选型。** DeepSeek 只提供聊天模型，不提供 Embedding 接口，所以项目现在没有可用的向量化能力。需要先决定走云端还是本地：
 
 ```text
-启动 PostgreSQL + pgvector
-  -> 创建知识库
-  -> 上传真实 PDF
-  -> 检查 rag.document 和 storage/documents
-  -> 验证重复上传、非法文件和删除行为
-  -> 进入 PDF 解析和自动分块
+云端：阿里云百炼 text-embedding-v3、智谱 embedding-3、硅基流动 BAAI/bge-m3
+本地：bge-m3 通过 Ollama 或 ONNX Runtime 运行
 ```
 
-完成文档上传后，再进入 PDF 解析和自动分块，不要一次性把解析、向量化、问答全部堆进上传接口。
+这个选择决定了依赖引哪个 starter、向量维度是多少、pgvector 建表的列怎么定义，所以必须在写代码之前定，不要先写代码再补。
+
+定下来之后的推进顺序：
+
+```text
+确定 Embedding 模型与向量维度
+  -> Chunk 向量化并写入 PGVector
+  -> 问题向量化 + Top-K 相似度检索
+  -> 验证召回结果带文档 ID、页码和原文
+  -> 进入阶段 5 的 RAG 问答与引用溯源
+```
+
+仍然遵守同一条原则：一次只推进一步，不要一次性把向量化、检索、问答全部堆进去。

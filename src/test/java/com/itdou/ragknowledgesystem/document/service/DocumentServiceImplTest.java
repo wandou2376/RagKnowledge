@@ -84,7 +84,7 @@ class DocumentServiceImplTest {
 
         assertThatThrownBy(() -> documentService.upload(knowledgeBaseId, file))
                 .isInstanceOf(InvalidDocumentException.class)
-                .hasMessageContaining("not a valid PDF");
+                .hasMessageContaining("不是有效的 PDF 文件");
 
         verify(fileStorage, never()).storePdf(any());
         verify(documentRepository, never()).saveAndFlush(any());

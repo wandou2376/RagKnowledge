@@ -62,6 +62,9 @@ public class Document {
     protected Document() {
     }
 
+    // error_message 列是 VARCHAR(255)，超出长度直接写库会被数据库拒绝，所以统一在这里截断
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 255;
+
     public static Document pending(
             UUID knowledgeBaseId,
             String originalFileName,
@@ -79,6 +82,32 @@ public class Document {
         document.fileHash = fileHash;
         document.parseStatus = DocumentParseStatus.PENDING;
         return document;
+    }
+
+    // 进入解析流程，同时清掉上一次解析留下的结果，重新解析才是幂等的
+    public void markParsing() {
+        this.parseStatus = DocumentParseStatus.PARSING;
+        this.parsedAt = null;
+        this.errorMessage = null;
+    }
+
+    public void markCompleted(Instant parsedAt) {
+        this.parseStatus = DocumentParseStatus.COMPLETED;
+        this.parsedAt = parsedAt;
+        this.errorMessage = null;
+    }
+
+    public void markFailed(String errorMessage) {
+        this.parseStatus = DocumentParseStatus.FAILED;
+        this.parsedAt = null;
+        this.errorMessage = truncate(errorMessage);
+    }
+
+    private static String truncate(String value) {
+        if (value == null || value.length() <= ERROR_MESSAGE_MAX_LENGTH) {
+            return value;
+        }
+        return value.substring(0, ERROR_MESSAGE_MAX_LENGTH);
     }
 
     @PrePersist
