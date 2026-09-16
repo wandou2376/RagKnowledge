@@ -21,7 +21,7 @@
 | 开发语言 | Java 21 |
 | 后端框架 | Spring Boot 3.5.x |
 | AI 编排 | Spring AI 1.0.0 |
-| 聊天模型 | DeepSeek `deepseek-v4-flash-vision-exp` |
+| 聊天模型 | DeepSeek `deepseek-flash` |
 | 模型接入方式 | OpenAI 兼容 API |
 | 业务数据库 | PostgreSQL 17 |
 | 向量检索 | pgvector 0.8.x |
@@ -34,7 +34,7 @@
 | 本地环境 | Docker Desktop + WSL2 |
 | 测试工具 | JUnit 5、Mockito、Postman/Apifox |
 
-聊天模型只负责生成回答和处理图片理解，不负责文档向量化。进入向量化阶段后，还需要单独选择 Embedding 模型，例如云端 Embedding API 或本地 `bge-m3`。
+聊天模型只负责生成回答和处理图片理解，不负责文档向量化。**DeepSeek 官方不提供 Embedding 接口**（`api.deepseek.com/embeddings` 返回 404），所以向量化必须外挂一家。阶段 4 已选定：**硅基流动 `BAAI/bge-m3`，1024 维，走 OpenAI 兼容接口**，免费、中国大陆直连、中文效果均衡。
 
 ## 3. 16GB 内存运行策略
 
@@ -214,7 +214,7 @@ GET    /api/documents/{documentId}/chunks    查看该文档的分块结果
 - **扫描版 PDF 兜底未实现**：当前行为是提取不到任何文本时返回 `422 DOCUMENT_PARSING_FAILED`，并把文档置为 `FAILED` 且写入 `error_message`。渲染页面图片交给视觉模型识别的能力尚未开发。
 - **解析是同步接口**：大文件会阻塞请求。异步任务、失败重试和 `ingestion_task` 表的实际使用按计划放在阶段 8。
 
-### 阶段 4：Embedding 和 PGVector 检索
+### 阶段 4：Embedding 和 PGVector 检索（已完成）
 
 选择单独的 Embedding 模型后：
 
@@ -223,19 +223,56 @@ Chunk -> Embedding -> vector_store
 问题 -> Embedding -> Top-K 相似度检索
 ```
 
-需要确定：
+#### 选型决定
 
-- Embedding 模型名称。
-- 向量维度。
-- 相似度算法（余弦相似度优先）。
-- Top-K 数量。
-- 知识库过滤条件。
+| 项 | 决定 | 理由 |
+| --- | --- | --- |
+| 模型 | 硅基流动 `BAAI/bge-m3` | DeepSeek 不提供 Embedding 接口，必须外挂一家；这个免费、中国大陆直连、中文效果均衡 |
+| 维度 | 1024 | 模型输出维度，对应 `embedding vector(1024)` |
+| 相似度算法 | 余弦距离（`vector_cosine_ops`） | bge-m3 是归一化向量，余弦是这类模型的标准选择 |
+| Top-K | 默认 5，可传参，上限 50 | |
+| 知识库过滤 | `WHERE knowledge_base_id = ?` | 复用已有的 `idx_document_chunk_knowledge_base_id` |
 
-验收标准：
+**向量存储没有用计划原先写的 `vector_store` 独立表，而是扩展现有的 `document_chunk`**：正文只存一份不重复，页码、文档 ID、知识库 ID 这些字段现成就在，阶段 5 要的「来源文档 + 页码 + 原文片段」一个 join 就能拿到。pom 里原先引的 `spring-ai-starter-vector-store-pgvector` 因此移除了。
 
-- Chunk 能被向量化并写入 PGVector。
-- 输入问题能召回相关 Chunk。
-- 检索结果带有文档 ID、页码和原文。
+#### 本阶段已实现
+
+接口：
+
+```text
+POST   /api/documents/{documentId}/embed              向量化该文档下待处理的分块
+POST   /api/knowledge-bases/{knowledgeBaseId}/search  语义检索，返回 Top-K 分块
+```
+
+- 迁移 `V5__add_chunk_embedding_column.sql`：`document_chunk` 增加 `embedding vector(1024)`、`embedding_model`、`embedded_at`，并建 HNSW + 余弦距离索引。
+- 向量化按 `batch-size` 分批调用外部服务，调用在事务外、只在写库时开短事务；重复调用幂等，已由当前模型处理过的分块会跳过；`embedding_model` 与配置不一致时会自动重算，支持换模型。
+- `embedding` 列不做 JPA 映射（Hibernate 没有内置 vector 类型），写入和检索都走原生 SQL，中间把 `float[]` 转成 pgvector 字面量并校验维度与合法值。
+- 检索返回分块 ID、文档 ID、来源文件名、页码区间、原文和余弦相似度。
+- 未配置 API Key、外部服务报错、返回维度不符等情况统一抛 `EmbeddingFailedException`，HTTP 层映射成 **503**（外部依赖问题，与 500 服务端故障区分开）。
+- 聊天模型名从已退役的 `deepseek-v4-flash-vision-exp` 更新为 `deepseek-flash`。
+
+#### 验证情况
+
+全部通过，包括完整的「上传 → 解析 → 向量化 → 检索」链路：
+
+- 全量单元测试 86 个（本阶段新增 27 个），覆盖向量字面量转换、向量化编排、检索服务，以及两个新接口的响应契约。
+- 数据库侧集成测试 3 个（`ChunkVectorStoreIT`，需 `RUN_EXTERNAL_TESTS=true`）：在真实 pgvector 上写入向量、验证按余弦相似度排序、验证知识库隔离、验证未向量化的分块被排除。原生 SQL 写入与接口投影映射这两处风险点由此覆盖。
+- 真实启动验证：Flyway V5 干净应用，`embedding` 列与 HNSW 索引建对，应用正常启动（`ddl-auto=validate` 通过），Embedding 客户端按配置装配成功。
+- **真实调用硅基流动完成向量化**：6 页 PDF 切成 5 个分块，4 页的文本全部向量化成功，数据库里每行 `vector_dims(embedding) = 1024`、`embedding_model = BAAI/bge-m3`、`embedded_at` 非空，整批耗时 1.1 秒。
+- **幂等**：同一个文档再调一次 `/embed`，返回 `embeddedCount=0`、`alreadyEmbeddedCount=5`，没有重复消耗额度。
+- **换模型自动重算**：把库里的 `embedding_model` 改成 `old-model-v1` 模拟换模型，再调 `/embed` 返回 `embeddedCount=5`，5 条全部重新向量化并写回新模型名。
+- **语义检索质量**：英文提问 `artificial intelligence and pattern recognition journals` 跨语言召回了中文文档中含「中国人工智能学会」「中国图象图形学学会」的段落，相似度 0.5342；中文提问「机器人相关的期刊有哪些」命中含「机器人 中国科学院沈阳自动化研究所」的段落，相似度 0.6205。两次都按相似度单调递减，结果带文档 ID、来源文件名、页码区间和原文。
+- **知识库隔离**：在不存在的知识库检索返回 404，在空知识库检索返回空数组而不是报错。
+- **参数校验**：空 query 返回 400，消息为中文。
+
+一处如实说明：表里只有 5 行数据时，PostgreSQL 的执行计划选择 Sort 而不是 HNSW 索引，所以**索引在这个数据量下没有被用到，也无法演示**。索引本身已正确创建（`USING hnsw (embedding vector_cosine_ops)`），数据量上去之后才会生效。
+
+#### 留待后续
+
+- 检索没有相似度阈值过滤，只取 Top-K，低质量召回会一并返回。阈值调优放到阶段 7。
+- 没有关键词检索、结果融合和 Rerank，按计划属于阶段 7。
+- 检索没有缓存，按计划属于阶段 6（Redis）。
+- 换 Embedding 模型需要新建迁移改 `embedding vector(N)` 的维度——Flyway 迁移是静态 SQL，无法参数化。
 
 ### 阶段 5：RAG 问答和引用溯源
 
@@ -428,25 +465,23 @@ API Key 和数据库密码只放在本地 `.env` 或环境变量中，不要写�
 
 ## 10. 当前下一步
 
-阶段 2 的上传链路和阶段 3 的解析分块都已联调通过，下一步是阶段 4 的 Embedding 与 PGVector 检索。
+阶段 4 的向量化与检索已联调通过，下一步是**阶段 5：RAG 问答和引用溯源**。
 
-**开工前必须先定下来的事：Embedding 模型选型。** DeepSeek 只提供聊天模型，不提供 Embedding 接口，所以项目现在没有可用的向量化能力。需要先决定走云端还是本地：
+开工前不需要再定别的事——检索接口返回的字段（文档 ID、来源文件名、页码区间、原文）已经足够组装带引用的回答。阶段 5 要做的是把检索结果拼成上下文、约束模型只依据上下文作答、并把引用编号映射回具体分块。
 
-```text
-云端：阿里云百炼 text-embedding-v3、智谱 embedding-3、硅基流动 BAAI/bge-m3
-本地：bge-m3 通过 Ollama 或 ONNX Runtime 运行
-```
-
-这个选择决定了依赖引哪个 starter、向量维度是多少、pgvector 建表的列怎么定义，所以必须在写代码之前定，不要先写代码再补。
-
-定下来之后的推进顺序：
+推进顺序：
 
 ```text
-确定 Embedding 模型与向量维度
-  -> Chunk 向量化并写入 PGVector
-  -> 问题向量化 + Top-K 相似度检索
-  -> 验证召回结果带文档 ID、页码和原文
-  -> 进入阶段 5 的 RAG 问答与引用溯源
+调用向量检索拿到 Top-K 分块
+  -> 组装系统 Prompt 与上下文（每段带引用编号）
+  -> 调用 DeepSeek（deepseek-flash）
+  -> 解析回答里的引用编号，映射回文档、页码和原文
+  -> 返回答案 + 来源列表
 ```
 
-仍然遵守同一条原则：一次只推进一步，不要一次性把向量化、检索、问答全部堆进去。
+两个已经踩过、写新代码时要记住的坑：
+
+- **`app.embedding.base-url` 不能带 `/v1`**。Spring AI 会自己拼路径，照着服务商文档里按 OpenAI 官方 SDK 约定写的 `.../v1` 抄过来会变成 `/v1/v1/embeddings` 并返回 404。
+- **外部依赖（Embedding）失败映射成 503**，与 500 服务端自身故障区分开。阶段 5 调用 DeepSeek 失败时沿用同一约定。
+
+仍然遵守同一条原则：一次只推进一步，不要一次性把检索、问答、多轮记忆全部堆进去。

@@ -1,11 +1,13 @@
 package com.itdou.ragknowledgesystem.document.controller;
 
 import com.itdou.ragknowledgesystem.common.response.Result;
+import com.itdou.ragknowledgesystem.document.dto.ChunkEmbeddingResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentChunkResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentParseResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentResponse;
 import com.itdou.ragknowledgesystem.document.service.DocumentService;
 import com.itdou.ragknowledgesystem.ingestion.service.DocumentIngestionService;
+import com.itdou.ragknowledgesystem.retrieval.service.ChunkEmbeddingService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,13 +29,16 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final DocumentIngestionService documentIngestionService;
+    private final ChunkEmbeddingService chunkEmbeddingService;
 
     public DocumentController(
             DocumentService documentService,
-            DocumentIngestionService documentIngestionService
+            DocumentIngestionService documentIngestionService,
+            ChunkEmbeddingService chunkEmbeddingService
     ) {
         this.documentService = documentService;
         this.documentIngestionService = documentIngestionService;
+        this.chunkEmbeddingService = chunkEmbeddingService;
     }
 
     // 上传成功返回 201，Location 头指向文档元数据，body 同样是 Result 信封
@@ -79,5 +84,15 @@ public class DocumentController {
     @GetMapping("/documents/{documentId}/chunks")
     public Result<List<DocumentChunkResponse>> listChunks(@PathVariable UUID documentId) {
         return Result.success(documentIngestionService.listChunks(documentId));
+    }
+
+    /*
+     * 向量化：把该文档下还没处理过的分块送去 Embedding 服务并写回向量。
+     * 和解析分开是刻意的——解析不依赖外部服务，向量化依赖 Embedding 服务，
+     * 拆开后 Embedding 服务不可用时也不影响上传和解析。
+     */
+    @PostMapping("/documents/{documentId}/embed")
+    public Result<ChunkEmbeddingResponse> embed(@PathVariable UUID documentId) {
+        return Result.success(chunkEmbeddingService.embedDocument(documentId));
     }
 }

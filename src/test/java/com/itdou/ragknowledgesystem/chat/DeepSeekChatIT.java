@@ -34,7 +34,7 @@ class DeepSeekChatIT {
                 .call()
                 .content();
 
-        assertThat(model).isEqualTo("deepseek-v4-flash-vision-exp");
+        assertThat(model).isEqualTo("deepseek-flash");
         assertThat(content).containsIgnoringCase("connection successful");
     }
 }

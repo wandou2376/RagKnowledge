@@ -1,5 +1,6 @@
 package com.itdou.ragknowledgesystem.document.controller;
 
+import com.itdou.ragknowledgesystem.document.dto.ChunkEmbeddingResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentChunkResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentParseResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentResponse;
@@ -11,6 +12,8 @@ import com.itdou.ragknowledgesystem.document.exception.InvalidDocumentException;
 import com.itdou.ragknowledgesystem.document.service.DocumentService;
 import com.itdou.ragknowledgesystem.ingestion.service.DocumentIngestionService;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
+import com.itdou.ragknowledgesystem.retrieval.exception.EmbeddingFailedException;
+import com.itdou.ragknowledgesystem.retrieval.service.ChunkEmbeddingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -58,6 +61,9 @@ class DocumentControllerTest {
 
     @MockitoBean
     private DocumentIngestionService documentIngestionService;
+
+    @MockitoBean
+    private ChunkEmbeddingService chunkEmbeddingService;
 
     @Test
     void uploadShouldReturn201WithLocationAndWrappedBody() throws Exception {
@@ -217,8 +223,45 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.code").value("DOCUMENT_NOT_FOUND"));
     }
 
-    private static MockMultipartFile pdfFile() {
-        return new MockMultipartFile("file", "guide.pdf", "application/pdf",
+    @Test
+    void embedShouldWrapInEnvelope() throws Exception {
+        given(chunkEmbeddingService.embedDocument(DOCUMENT_ID)).willReturn(
+                new ChunkEmbeddingResponse(DOCUMENT_ID, "BAAI/bge-m3", 1024, 5, 0, Instant.now()));
+
+        mockMvc.perform(post("/api/documents/{id}/embed", DOCUMENT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("OK"))
+                .andExpect(jsonPath("$.message").value("成功"))
+                .andExpect(jsonPath("$.data.documentId").value(DOCUMENT_ID.toString()))
+                .andExpect(jsonPath("$.data.embeddingModel").value("BAAI/bge-m3"))
+                .andExpect(jsonPath("$.data.dimension").value(1024))
+                .andExpect(jsonPath("$.data.embeddedCount").value(5))
+                .andExpect(jsonPath("$.data.alreadyEmbeddedCount").value(0));
+    }
+
+    @Test
+    void embedShouldReturnNotFoundEnvelopeWhenDocumentMissing() throws Exception {
+        given(chunkEmbeddingService.embedDocument(DOCUMENT_ID))
+                .willThrow(new DocumentNotFoundException(DOCUMENT_ID));
+
+        mockMvc.perform(post("/api/documents/{id}/embed", DOCUMENT_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DOCUMENT_NOT_FOUND"));
+    }
+
+    // Embedding 是外部依赖，未配置或不可用时用 503，与普通服务端故障区分开
+    @Test
+    void embedShouldReturnServiceUnavailableWhenEmbeddingIsNotConfigured() throws Exception {
+        given(chunkEmbeddingService.embedDocument(DOCUMENT_ID))
+                .willThrow(new EmbeddingFailedException("未配置 Embedding 服务，请先设置环境变量 SILICONFLOW_API_KEY"));
+
+        mockMvc.perform(post("/api/documents/{id}/embed", DOCUMENT_ID))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("EMBEDDING_FAILED"))
+                .andExpect(jsonPath("$.message").value(containsString("SILICONFLOW_API_KEY")));
+    }
+
+    private static MockMultipartFile pdfFile() {        return new MockMultipartFile("file", "guide.pdf", "application/pdf",
                 "%PDF-1.7\nexample".getBytes(StandardCharsets.UTF_8));
     }
 

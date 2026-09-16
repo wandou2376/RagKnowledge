@@ -23,7 +23,8 @@ spring:
       base-url: https://api.deepseek.com
       chat:
         options:
-          model: deepseek-v4-flash-vision-exp
+          # 官方当前的模型名。旧的 deepseek-v4-flash-vision-exp 已标记为 legacy，会转发到 DeepSeek-V4.1-Flash
+          model: deepseek-flash
           temperature: 0.2
 
   servlet:
@@ -46,6 +47,19 @@ app:
     boilerplate-page-ratio: 0.6
     # 页数少于该值时不做页眉页脚剔除
     boilerplate-min-pages: 3
+  embedding:
+    # 硅基流动的 OpenAI 兼容接口，提供 BAAI/bge-m3。DeepSeek 不提供 Embedding 接口，必须外挂一家。
+    # 注意这里不带 /v1：Spring AI 会自己在 base URL 后面拼 /v1/embeddings，
+    # 而官方文档给的 https://api.siliconflow.cn/v1 是按 OpenAI 官方 SDK 的约定写的，
+    # 直接抄过来会请求到 /v1/v1/embeddings 并返回 404。
+    base-url: https://api.siliconflow.cn
+    # 留空时应用仍能启动，只有在真正调用向量化接口时才会报错，方便先跑通上传和解析
+    api-key: ${SILICONFLOW_API_KEY:}
+    model: BAAI/bge-m3
+    # 必须与 V5 迁移里 embedding vector(N) 的 N 一致，启动后第一次向量化时也会校验
+    dimension: 1024
+    # 单次请求最多提交多少个分块，避免触发服务端的批量上限
+    batch-size: 16
 
 logging:
   level:

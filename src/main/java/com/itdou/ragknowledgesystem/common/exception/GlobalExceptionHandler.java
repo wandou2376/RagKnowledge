@@ -7,6 +7,7 @@ import com.itdou.ragknowledgesystem.document.exception.DocumentStorageException;
 import com.itdou.ragknowledgesystem.document.exception.DuplicateDocumentException;
 import com.itdou.ragknowledgesystem.document.exception.InvalidDocumentException;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
+import com.itdou.ragknowledgesystem.retrieval.exception.EmbeddingFailedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -82,6 +83,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<Void>> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
         log.warn("数据库约束冲突", exception);
         return failure(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION", "数据冲突，请确认是否存在重复内容或并发操作");
+    }
+
+    /*
+     * 向量化失败。失败点在外部 Embedding 服务或配置上，用 503 而不是 500，
+     * 明确告诉调用方这是依赖问题（可能是没配 Key，也可能是对方服务不可用）。
+     */
+    @ExceptionHandler(EmbeddingFailedException.class)
+    public ResponseEntity<Result<Void>> handleEmbeddingFailed(EmbeddingFailedException exception) {
+        log.error("向量化失败", exception);
+        return failure(HttpStatus.SERVICE_UNAVAILABLE, "EMBEDDING_FAILED", exception.getMessage());
     }
 
     /*

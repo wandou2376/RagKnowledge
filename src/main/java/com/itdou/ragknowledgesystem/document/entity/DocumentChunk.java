@@ -60,6 +60,18 @@ public class DocumentChunk {
     @Column(name = "token_count", nullable = false)
     private int tokenCount;
 
+    /*
+     * embedding 列（pgvector 的 vector(1024)）刻意不做 JPA 映射：
+     * Hibernate 没有内置的 vector 类型，硬映射要额外引入 pgvector 的 JDBC 类型。
+     * 向量的写入和相似度查询都走原生 SQL，见 DocumentChunkRepository。
+     * 下面两列与向量在同一条 SQL 里更新，在 Java 侧只读不写。
+     */
+    @Column(name = "embedding_model", length = 100)
+    private String embeddingModel;
+
+    @Column(name = "embedded_at")
+    private Instant embeddedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -97,7 +109,6 @@ public class DocumentChunk {
         createdAt = now;
         updatedAt = now;
     }
-
     @PreUpdate
     void updateTimestamp() {
         updatedAt = Instant.now();

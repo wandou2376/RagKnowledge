@@ -27,4 +27,64 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
     // 跨文档去重用：uk_knowledge_base_chunk_hash 保证同一知识库内分块内容唯一
     @Query("select chunk.contentHash from DocumentChunk chunk where chunk.knowledgeBaseId = :knowledgeBaseId")
     Set<String> findContentHashesByKnowledgeBaseId(@Param("knowledgeBaseId") UUID knowledgeBaseId);
+
+    /*
+     * 待向量化的分块：还没有向量，或者向量的产生模型和当前配置的不一致。
+     * 后者用于换 Embedding 模型后的重算——维度与语义空间都变了，必须整体重做。
+     */
+    @Query("""
+            select chunk from DocumentChunk chunk
+            where chunk.documentId = :documentId
+              and (chunk.embeddedAt is null or chunk.embeddingModel <> :embeddingModel)
+            order by chunk.chunkIndex asc
+            """)
+    List<DocumentChunk> findChunksNeedingEmbedding(
+            @Param("documentId") UUID documentId,
+            @Param("embeddingModel") String embeddingModel);
+
+    /*
+     * 写入向量和向量化元数据。embedding 列没有 JPA 映射（原因见 DocumentChunk 的注释），只能走原生 SQL。
+     * 三列在一条语句里写完，避免出现「写了向量但 embedded_at 为空」导致下次被重复向量化。
+     * :embedding 传的是 pgvector 字面量，形如 [0.1,0.2,...]，所以必须显式 CAST 成 vector。
+     */
+    @Modifying
+    @Query(value = """
+            update rag.document_chunk
+               set embedding = CAST(:embedding AS vector),
+                   embedding_model = :embeddingModel,
+                   embedded_at = now()
+             where id = :id
+            """, nativeQuery = true)
+    void updateEmbedding(
+            @Param("id") UUID id,
+            @Param("embedding") String embedding,
+            @Param("embeddingModel") String embeddingModel);
+
+    long countByDocumentId(UUID documentId);
+
+    /*
+     * 余弦相似度检索。pgvector 的 <=> 返回余弦距离，1 - 距离就是相似度。
+     * ORDER BY 必须也用 <=> 才能命中 HNSW 索引，换成别的表达式会退化成全表扫描。
+     */
+    @Query(value = """
+            SELECT c.id                                             AS "chunkId",
+                   c.document_id                                    AS "documentId",
+                   c.chunk_index                                    AS "chunkIndex",
+                   c.content                                        AS "content",
+                   c.page_number_start                              AS "pageNumberStart",
+                   c.page_number_end                                AS "pageNumberEnd",
+                   c.token_count                                    AS "tokenCount",
+                   d.original_file_name                             AS "originalFileName",
+                   1 - (c.embedding <=> CAST(:embedding AS vector)) AS "score"
+            FROM rag.document_chunk c
+            JOIN rag.document d ON d.id = c.document_id
+            WHERE c.knowledge_base_id = :knowledgeBaseId
+              AND c.embedding IS NOT NULL
+            ORDER BY c.embedding <=> CAST(:embedding AS vector)
+            LIMIT :topK
+            """, nativeQuery = true)
+    List<ChunkSearchProjection> searchByEmbedding(
+            @Param("knowledgeBaseId") UUID knowledgeBaseId,
+            @Param("embedding") String embedding,
+            @Param("topK") int topK);
 }
