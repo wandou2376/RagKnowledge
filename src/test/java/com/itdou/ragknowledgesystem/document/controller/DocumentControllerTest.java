@@ -231,7 +231,7 @@ class DocumentControllerTest {
         mockMvc.perform(post("/api/documents/{id}/embed", DOCUMENT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("OK"))
-                .andExpect(jsonPath("$.message").value("成功"))
+                .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data.documentId").value(DOCUMENT_ID.toString()))
                 .andExpect(jsonPath("$.data.embeddingModel").value("BAAI/bge-m3"))
                 .andExpect(jsonPath("$.data.dimension").value(1024))

@@ -50,7 +50,7 @@ class RetrievalControllerTest {
                         .content("{\"query\":\"错误码 E-4012 是什么\",\"topK\":3}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("OK"))
-                .andExpect(jsonPath("$.message").value("成功"))
+                .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].documentId")
                         .value("22222222-2222-2222-2222-222222222222"))

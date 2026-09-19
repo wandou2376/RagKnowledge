@@ -6,6 +6,7 @@ import com.itdou.ragknowledgesystem.document.exception.DocumentParsingException;
 import com.itdou.ragknowledgesystem.document.exception.DocumentStorageException;
 import com.itdou.ragknowledgesystem.document.exception.DuplicateDocumentException;
 import com.itdou.ragknowledgesystem.document.exception.InvalidDocumentException;
+import com.itdou.ragknowledgesystem.chat.exception.AnswerGenerationException;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
 import com.itdou.ragknowledgesystem.retrieval.exception.EmbeddingFailedException;
 import lombok.extern.slf4j.Slf4j;
@@ -93,6 +94,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<Void>> handleEmbeddingFailed(EmbeddingFailedException exception) {
         log.error("向量化失败", exception);
         return failure(HttpStatus.SERVICE_UNAVAILABLE, "EMBEDDING_FAILED", exception.getMessage());
+    }
+
+    /*
+     * 生成回答失败。和向量化一样，失败点在外部服务上，用 503 而不是 500。
+     */
+    @ExceptionHandler(AnswerGenerationException.class)
+    public ResponseEntity<Result<Void>> handleAnswerGenerationFailed(AnswerGenerationException exception) {
+        log.error("生成回答失败", exception);
+        return failure(HttpStatus.SERVICE_UNAVAILABLE, "ANSWER_GENERATION_FAILED", exception.getMessage());
     }
 
     /*

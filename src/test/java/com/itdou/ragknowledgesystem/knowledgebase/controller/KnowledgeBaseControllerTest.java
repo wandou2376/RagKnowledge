@@ -62,7 +62,7 @@ class KnowledgeBaseControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", endsWith(BASE_URL + "/" + id)))
                 .andExpect(jsonPath("$.code").value("OK"))
-                .andExpect(jsonPath("$.message").value("成功"))
+                .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data.id").value(id.toString()))
                 .andExpect(jsonPath("$.data.name").value("Java 知识库"))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"));

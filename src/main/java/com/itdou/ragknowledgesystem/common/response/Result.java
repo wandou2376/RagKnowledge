@@ -10,7 +10,11 @@ public record Result<T>(String code, String message, T data) {
 
     // 成功时的固定 code，前端可以直接用它判断业务是否成功
     public static final String SUCCESS_CODE = "OK";
-    private static final String SUCCESS_MESSAGE = "成功";
+    /*
+     * 成功消息固定用英文 success：这是程序判断的常态，不需要给人读。
+     * 中文留给异常消息——那些是要展示给用户看的，见 GlobalExceptionHandler。
+     */
+    private static final String SUCCESS_MESSAGE = "success";
 
     public static <T> Result<T> success(T data) {
         return new Result<>(SUCCESS_CODE, SUCCESS_MESSAGE, data);
