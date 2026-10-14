@@ -18,5 +18,23 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    restart: unless-stopped
+    ports:
+      # 映射到 6380 而不是默认的 6379，避免和本机原生安装的 Redis 撞端口，
+      # 与 PostgreSQL 用 5433 避开 5432 是同一个理由
+      - "6380:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - rag_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   rag_pgvector_data:
+  rag_redis_data:

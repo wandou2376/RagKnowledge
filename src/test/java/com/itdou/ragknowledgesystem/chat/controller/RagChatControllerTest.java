@@ -1,8 +1,10 @@
 package com.itdou.ragknowledgesystem.chat.controller;
 
+import com.itdou.ragknowledgesystem.chat.dto.ChatMessageResponse;
 import com.itdou.ragknowledgesystem.chat.dto.ChatResponse;
 import com.itdou.ragknowledgesystem.chat.dto.CitationResponse;
 import com.itdou.ragknowledgesystem.chat.exception.AnswerGenerationException;
+import com.itdou.ragknowledgesystem.chat.memory.ChatRole;
 import com.itdou.ragknowledgesystem.chat.service.RagChatService;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
 import com.itdou.ragknowledgesystem.retrieval.exception.EmbeddingFailedException;
@@ -20,13 +22,14 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 问答接口的响应契约测试，只加载 web 层，不依赖数据库，也不会真的调用模型。
+ * 问答与会话历史接口的响应契约测试，只加载 web 层，不依赖数据库和 Redis。
  */
 @WebMvcTest(
         controllers = RagChatController.class,
@@ -35,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class RagChatControllerTest {
 
     private static final String CHAT_URL = "/api/knowledge-bases/{id}/chat";
+    private static final String HISTORY_URL = "/api/knowledge-bases/{id}/conversations/{conversationId}";
     private static final UUID KNOWLEDGE_BASE_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @Autowired
@@ -46,14 +50,15 @@ class RagChatControllerTest {
     @Test
     void chatShouldWrapAnswerAndCitationsInEnvelope() throws Exception {
         given(ragChatService.ask(eq(KNOWLEDGE_BASE_ID), any())).willReturn(new ChatResponse(
-                "共有两类期刊[1]。", List.of(cited(), uncited()), 120, 18, 138));
+                "conv-1", "共有两类期刊[1]。", List.of(cited(), uncited()), 120, 18, 138));
 
         mockMvc.perform(post(CHAT_URL, KNOWLEDGE_BASE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"question\":\"有哪些期刊？\",\"topK\":5}"))
+                        .content("{\"question\":\"有哪些期刊？\",\"topK\":5,\"conversationId\":\"conv-1\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("OK"))
                 .andExpect(jsonPath("$.message").value("success"))
+                .andExpect(jsonPath("$.data.conversationId").value("conv-1"))
                 .andExpect(jsonPath("$.data.answer").value("共有两类期刊[1]。"))
                 .andExpect(jsonPath("$.data.sources.length()").value(2))
                 .andExpect(jsonPath("$.data.sources[0].index").value(1))
@@ -66,15 +71,17 @@ class RagChatControllerTest {
                 .andExpect(jsonPath("$.data.totalTokens").value(138));
     }
 
+    // 不带 conversationId 是单轮问答，响应里的 conversationId 应为 null
     @Test
-    void chatShouldReturnEmptySourcesWhenNothingRetrieved() throws Exception {
+    void chatShouldReturnNullConversationIdForSingleTurn() throws Exception {
         given(ragChatService.ask(eq(KNOWLEDGE_BASE_ID), any())).willReturn(
-                new ChatResponse("根据现有资料无法回答该问题。", List.of(), null, null, null));
+                new ChatResponse(null, "根据现有资料无法回答该问题。", List.of(), null, null, null));
 
         mockMvc.perform(post(CHAT_URL, KNOWLEDGE_BASE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"question\":\"无关问题\"}"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.conversationId").doesNotExist())
                 .andExpect(jsonPath("$.data.sources").isEmpty());
     }
 
@@ -96,6 +103,17 @@ class RagChatControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value(containsString("topK")));
+    }
+
+    // conversationId 会拼进 Redis key，必须挡住特殊字符
+    @Test
+    void chatShouldReturnValidationErrorForIllegalConversationId() throws Exception {
+        mockMvc.perform(post(CHAT_URL, KNOWLEDGE_BASE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"问题\",\"conversationId\":\"bad key:*\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value(containsString("conversationId")));
     }
 
     @Test
@@ -145,6 +163,40 @@ class RagChatControllerTest {
                         .content("{不是合法 JSON"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST_BODY"));
+    }
+
+    @Test
+    void historyShouldWrapMessagesInEnvelope() throws Exception {
+        given(ragChatService.history(KNOWLEDGE_BASE_ID, "conv-1")).willReturn(List.of(
+                new ChatMessageResponse(ChatRole.USER, "问题一"),
+                new ChatMessageResponse(ChatRole.ASSISTANT, "回答一")));
+
+        mockMvc.perform(get(HISTORY_URL, KNOWLEDGE_BASE_ID, "conv-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("OK"))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].role").value("USER"))
+                .andExpect(jsonPath("$.data[0].content").value("问题一"))
+                .andExpect(jsonPath("$.data[1].role").value("ASSISTANT"));
+    }
+
+    @Test
+    void historyShouldReturnEmptyArrayForNewConversation() throws Exception {
+        given(ragChatService.history(KNOWLEDGE_BASE_ID, "conv-new")).willReturn(List.of());
+
+        mockMvc.perform(get(HISTORY_URL, KNOWLEDGE_BASE_ID, "conv-new"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void historyShouldReturnNotFoundEnvelopeForUnknownKnowledgeBase() throws Exception {
+        given(ragChatService.history(KNOWLEDGE_BASE_ID, "conv-1"))
+                .willThrow(new KnowledgeBaseNotFoundException(KNOWLEDGE_BASE_ID));
+
+        mockMvc.perform(get(HISTORY_URL, KNOWLEDGE_BASE_ID, "conv-1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("KNOWLEDGE_BASE_NOT_FOUND"));
     }
 
     private static CitationResponse cited() {

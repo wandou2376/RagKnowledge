@@ -32,6 +32,17 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
 
+  data:
+    redis:
+      # Docker 里的 Redis 映射到 6380，避免和本机原生的 6379 撞端口
+      host: localhost
+      port: 6380
+      # 必须显式设超时：Lettuce 默认命令超时是 60 秒，
+      # Redis 挂掉时读一次、写一次会话历史会各等 60 秒，请求直接不可用。
+      # 会话记忆是增强能力，宁可快速降级为「没有历史」也不要让用户等两分钟。
+      timeout: 2s
+      connect-timeout: 1s
+
 app:
   storage:
     local-path: storage/documents
@@ -60,6 +71,12 @@ app:
     dimension: 1024
     # 单次请求最多提交多少个分块，避免触发服务端的批量上限
     batch-size: 16
+  chat:
+    memory:
+      # 每次提问最多带上多少轮历史对话（一轮 = 提问 + 回答），避免上下文无限增长
+      max-turns: 5
+      # 会话的过期时间，滑动续期：每次追加消息都会重置
+      ttl: 7d
 
 logging:
   level:
