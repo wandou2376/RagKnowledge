@@ -1,57 +1,758 @@
 [
   {
-    "question": "这份文档的编制单位是谁？",
-    "expectedChunkIndexes": [0],
-    "note": "答案在首页标题下方"
+    "type": "FACT",
+    "question": "平台当前的稳定版本和长期支持版本分别是多少？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "产品概述里一句话给出"
   },
   {
-    "question": "《大数据挖掘与分析》的主办单位是谁？",
-    "expectedChunkIndexes": [0],
-    "note": "T1 类第一本英文期刊"
+    "type": "FACT",
+    "question": "集群模式最少需要几台机器，为什么？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "部署与配置"
   },
   {
-    "question": "《软件学报》的主办单位是谁？",
-    "expectedChunkIndexes": [1],
-    "note": "T1 类中文期刊第 15 条"
+    "type": "FACT",
+    "question": "单个任务的默认内存上限是多少？超了会怎样？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 1
+      }
+    ],
+    "note": "架构章节"
   },
   {
-    "question": "《中文信息学报》的主办单位是谁？",
-    "expectedChunkIndexes": [1],
-    "note": "T1 类中文期刊最后一本"
+    "type": "FACT",
+    "question": "平台支持哪几种数据接入方式？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "数据接入"
   },
   {
-    "question": "《智能系统学报》的主办单位是谁？",
-    "expectedChunkIndexes": [2, 3],
-    "note": "跨分块边界，两个分块都含这条"
+    "type": "FACT",
+    "question": "告警可以通过哪些渠道通知？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 4
+      }
+    ],
+    "note": "监控告警"
   },
   {
-    "question": "《机器人》期刊的主办单位是谁？",
-    "expectedChunkIndexes": [3, 4],
-    "note": "T3 类，跨分块边界"
+    "type": "FACT",
+    "question": "平台是否能对接企业已有的统一登录？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 5
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 6
+      }
+    ],
+    "note": "安全与权限"
   },
   {
-    "question": "《计算机教育》的主办单位是谁？",
-    "expectedChunkIndexes": [1, 2],
-    "note": "T2 类，跨分块边界"
+    "type": "FACT",
+    "question": "任务失败后默认重试几次，间隔是怎么算的？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "任务调度"
   },
   {
-    "question": "《密码与信息安全学报》的主办单位是谁？",
-    "expectedChunkIndexes": [4],
-    "note": "T3 类后段"
+    "type": "FACT",
+    "question": "跨租户引用其他租户的任务，平台允许吗？应该怎么做？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 4
+      }
+    ],
+    "note": "任务调度"
   },
   {
-    "question": "《中兴通讯技术》的主办单位是谁？",
-    "expectedChunkIndexes": [4],
-    "note": "T3 类最后一本"
+    "type": "FACT",
+    "question": "平台的业务数据默认保留多久，由哪个配置项控制？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 5
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 1
+      }
+    ],
+    "note": "部署与配置表"
   },
   {
-    "question": "T3 类里有哪些中文期刊？",
-    "expectedChunkIndexes": [3, 4],
-    "note": "问的是一整个分类，不点名具体期刊"
+    "type": "FACT",
+    "question": "调度器会不会因为数据量增长自动扩容执行器？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 5
+      }
+    ],
+    "note": "故障排查"
   },
   {
-    "question": "T2 类里有哪些中文期刊？",
-    "expectedChunkIndexes": [1, 2],
-    "note": "问的是一整个分类，不点名具体期刊"
+    "type": "TABLE",
+    "question": "网关转发请求的默认超时时间是多少毫秒？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "配置表"
+  },
+  {
+    "type": "TABLE",
+    "question": "调度器扫描就绪任务的默认时间间隔是多少？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "配置表"
+  },
+  {
+    "type": "TABLE",
+    "question": "单执行器默认并发几个任务？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "配置表"
+  },
+  {
+    "type": "TABLE",
+    "question": "业务数据分区目录的默认日期格式是什么？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 5
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "配置表"
+  },
+  {
+    "type": "TABLE",
+    "question": "控制台会话的默认超时时间是多少分钟？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 7
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "配置表"
+  },
+  {
+    "type": "TABLE",
+    "question": "单租户不可用时，响应时限要求是多少？",
+    "expected": [
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "值班手册的升级路径表"
+  },
+  {
+    "type": "TABLE",
+    "question": "全平台不可用要找谁，响应时限是多少？",
+    "expected": [
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "值班手册的升级路径表"
+  },
+  {
+    "type": "TABLE",
+    "question": "平台承诺的任务调度成功率是多少？",
+    "expected": [
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "值班手册的 SLA 表"
+  },
+  {
+    "type": "TABLE",
+    "question": "哪个角色的原始问题只能查看、不能修改？",
+    "expected": [
+      {
+        "document": "nebula-glossary.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 5
+      }
+    ],
+    "note": "术语表；角色取值也在权限章节"
+  },
+  {
+    "type": "TABLE",
+    "question": "手动触发任务的开放 API 路径是什么？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 7
+      }
+    ],
+    "note": "开放 API 表"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "连接池耗尽这个错误码是什么，一级值班能不能自己处理？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码表给编号，值班手册说处置权限"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "数据校验和不一致时报什么错，值班手册对它的处置要求是什么？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 6
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 6
+      },
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码表 + 值班手册"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "调度器长时间无主超过多久算故障，该升级给谁？",
+    "expected": [
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 1
+      }
+    ],
+    "note": "值班手册内部跨表；SLA 与升级路径"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "内存超限的任务该怎么处理，为什么单纯扩容执行器没用？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码表 + FAQ"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "任务被跳过算不算失败，在哪几个地方有说明？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 3
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "错误码表 + FAQ"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "告警多久只通知一次，如果觉得不够该怎么办？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 4
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 5
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 5
+      }
+    ],
+    "note": "监控告警 + FAQ"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "从 3.8 升到 4.2 可以一步到位吗，中间要注意什么？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 8
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 5
+      }
+    ],
+    "note": "迁移与升级同一节"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "元数据查询变慢该归档什么，保留天数建议不低于多少？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 5
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 6
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 6
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 2
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码表 + 性能与容量"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "索引页面提示无权访问租户，可能是什么原因，该找谁？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 6
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 7
+      }
+    ],
+    "note": "错误码表 + 错误码处理建议"
+  },
+  {
+    "type": "MULTI_HOP",
+    "question": "位点超前这个错误，在哪些文档里都有提到？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 4
+      }
+    ],
+    "note": "错误码表与 FAQ 都可能涉及"
+  },
+  {
+    "type": "TERM",
+    "question": "E-7010 是什么错误，怎么解决？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 7
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 1
+      }
+    ],
+    "note": "错误码直查"
+  },
+  {
+    "type": "TERM",
+    "question": "E-4012 的触发条件是什么？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-oncall-guide.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码直查"
+  },
+  {
+    "type": "TERM",
+    "question": "E-6002 是什么错误？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 5
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "错误码直查"
+  },
+  {
+    "type": "TERM",
+    "question": "nebula.collector.batch.size 这个配置项是做什么的？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 0
+      },
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 2
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 2
+      }
+    ],
+    "note": "配置键直查"
+  },
+  {
+    "type": "TERM",
+    "question": "nebula.quality.sample.ratio 默认值是多少？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 6
+      }
+    ],
+    "note": "配置键直查"
+  },
+  {
+    "type": "TERM",
+    "question": "/openapi/v1/offsets/{datasourceId}/reset 这个接口有什么特别要求？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 7
+      }
+    ],
+    "note": "接口路径直查；路径在表格里被换行拆开，用同行说明列定位"
+  },
+  {
+    "type": "TERM",
+    "question": "令牌的有效期上限是多久？",
+    "expected": [
+      {
+        "document": "nebula-glossary.pdf",
+        "chunkIndex": 1
+      },
+      {
+        "document": "nebula-glossary.pdf",
+        "chunkIndex": 2
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 7
+      }
+    ],
+    "note": "术语表与权限章节"
+  },
+  {
+    "type": "TERM",
+    "question": "E-5014 意味着什么，还要继续重试吗？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 4
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码直查"
+  },
+  {
+    "type": "TERM",
+    "question": "4.2.0 这个版本有哪些主要变化？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "变更记录直查"
+  },
+  {
+    "type": "TERM",
+    "question": "3.8.6 是最后一次功能更新吗？",
+    "expected": [
+      {
+        "document": "nebula-changelog.pdf",
+        "chunkIndex": 1
+      }
+    ],
+    "note": "变更记录直查"
+  },
+  {
+    "type": "TERM",
+    "question": "E-4006 和 E-4007 都是位点相关的问题，区别是什么？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "错误码相邻条目，考察精确召回"
+  },
+  {
+    "type": "TERM",
+    "question": "数据源连接密码用什么算法加密？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 5
+      }
+    ],
+    "note": "安全与权限"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "有个任务跑得比平时慢很多，但错误码是 0，我该先怀疑什么？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 5
+      }
+    ],
+    "note": "故障排查的经验条目"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "我的任务明明成功了，下游却说查不到数据，可能是什么情况？",
+    "expected": [
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 0
+      }
+    ],
+    "note": "FAQ"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "想给某张表配更严格的一致性检查，要动哪个参数？代价是什么？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 6
+      }
+    ],
+    "note": "数据质量与校验"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "平台能不能算某个字段的空值率这类质量指标？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 6
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 7
+      }
+    ],
+    "note": "数据质量与校验"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "升级一次大概要停机多久？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 7
+      },
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 8
+      }
+    ],
+    "note": "迁移与升级"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "升级之后发现不行，能退回去吗？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 8
+      }
+    ],
+    "note": "迁移与升级"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "表里的记录会重复吗？",
+    "expected": [
+      {
+        "document": "nebula-handbook.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "数据接入的消费位点说明"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "能自己在平台上写一段脚本来处理数据吗？",
+    "expected": [
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      },
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 4
+      }
+    ],
+    "note": "FAQ"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "一个租户能配很多数据源吗，会有什么隐患？",
+    "expected": [
+      {
+        "document": "nebula-ops-faq.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "FAQ"
+  },
+  {
+    "type": "PARAPHRASE",
+    "question": "为什么我的任务明明是手动点了触发却没跑起来？",
+    "expected": [
+      {
+        "document": "nebula-error-codes.pdf",
+        "chunkIndex": 3
+      }
+    ],
+    "note": "错误码 E-5009 与 FAQ"
   }
 ]

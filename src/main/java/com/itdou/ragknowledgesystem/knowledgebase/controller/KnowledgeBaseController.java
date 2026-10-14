@@ -62,7 +62,8 @@ public class KnowledgeBaseController {
         return Result.success(knowledgeBaseService.update(id, request));
     }
 
-    // 删除保持 204 No Content：这是 11 个接口里唯一不返回信封的例外，前端拦截器需要处理无 body 的情况
+    // 删除保持 204 No Content：这是接口里不返回信封的例外之一（另一个是删除文档），
+    // 前端拦截器需要处理无 body 的情况
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         knowledgeBaseService.delete(id);

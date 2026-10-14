@@ -8,6 +8,16 @@ target/
 out/
 *.class
 
+# 前端构建产物与依赖
+node_modules/
+dist/
+.vite/
+*.local
+
+# 语料生成脚本的 Python 字节码
+__pycache__/
+*.pyc
+
 # IDE（.idea/ 不覆盖根目录的 .iml）
 .idea/
 *.iml
@@ -23,7 +33,7 @@ out/
 /storage/
 
 # 本地学习笔记
-/docs/learning-notes.md
+/docs/
 
 # 本地开发约定文档（角色、日志、响应格式等约定），只留在本机
 AGENTS.md

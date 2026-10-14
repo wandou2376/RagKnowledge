@@ -250,6 +250,8 @@ public class DocumentServiceImpl implements DocumentService {
                 document.getMediaType(),
                 document.getFileSize(),
                 document.getParseStatus(),
+                document.getErrorMessage(),
+                document.getParsedAt(),
                 document.getCreatedAt(),
                 document.getUpdatedAt()
         );

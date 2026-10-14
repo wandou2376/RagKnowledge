@@ -154,6 +154,23 @@ class DocumentControllerTest {
                 .andExpect(content().string(containsString("\"data\":null")));
     }
 
+    // 解析失败的行要让前端能看到原因，否则列表里只有一个 FAILED 状态，看不出为什么
+    @Test
+    void getByIdShouldExposeParseFailureReason() throws Exception {
+        Instant now = Instant.now();
+        given(documentService.getById(DOCUMENT_ID)).willReturn(new DocumentResponse(
+                DOCUMENT_ID, KNOWLEDGE_BASE_ID, "scanned.pdf", "application/pdf", 2048L,
+                DocumentParseStatus.FAILED, "未从 PDF 中提取到任何文本，可能是扫描版或图片型 PDF",
+                null, now, now));
+
+        mockMvc.perform(get("/api/documents/{id}", DOCUMENT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.parseStatus").value("FAILED"))
+                .andExpect(jsonPath("$.data.errorMessage")
+                        .value(containsString("未从 PDF 中提取到任何文本")))
+                .andExpect(jsonPath("$.data.parsedAt").doesNotExist());
+    }
+
     @Test
     void deleteShouldReturn204WithoutBody() throws Exception {
         mockMvc.perform(delete("/api/documents/{id}", DOCUMENT_ID))
@@ -268,7 +285,7 @@ class DocumentControllerTest {
     private static DocumentResponse documentResponse() {
         Instant now = Instant.now();
         return new DocumentResponse(DOCUMENT_ID, KNOWLEDGE_BASE_ID, "guide.pdf", "application/pdf",
-                2048L, DocumentParseStatus.PENDING, now, now);
+                2048L, DocumentParseStatus.PENDING, null, null, now, now);
     }
 
     private static DocumentParseResponse parseResponse() {
