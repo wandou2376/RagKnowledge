@@ -1,7 +1,9 @@
 package com.itdou.ragknowledgesystem.knowledgebase.service;
 
+import com.itdou.ragknowledgesystem.document.service.DocumentService;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.CreateKnowledgeBaseRequest;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.KnowledgeBaseResponse;
+import com.itdou.ragknowledgesystem.knowledgebase.entity.KnowledgeBase;
 import com.itdou.ragknowledgesystem.knowledgebase.entity.KnowledgeBaseStatus;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
 import com.itdou.ragknowledgesystem.knowledgebase.repository.KnowledgeBaseRepository;
@@ -25,6 +27,9 @@ class KnowledgeBaseServiceImplTest {
 
     @Mock
     private KnowledgeBaseRepository knowledgeBaseRepository;
+
+    @Mock
+    private DocumentService documentService;
 
     @InjectMocks
     private KnowledgeBaseServiceImpl knowledgeBaseService;
@@ -50,5 +55,19 @@ class KnowledgeBaseServiceImplTest {
         assertThatThrownBy(() -> knowledgeBaseService.getById(id))
                 .isInstanceOf(KnowledgeBaseNotFoundException.class)
                 .hasMessageContaining(id.toString());
+    }
+
+    // 数据库的行可以由外键级联清理，但物理文件必须由应用先删，否则会留在磁盘上
+    @Test
+    void deleteShouldCleanUpDocumentsBeforeRemovingKnowledgeBase() {
+        UUID id = UUID.randomUUID();
+        when(knowledgeBaseRepository.findById(id)).thenReturn(Optional.of(
+                KnowledgeBase.create("待删除的知识库", "描述")));
+
+        knowledgeBaseService.delete(id);
+
+        // 先清文档（含物理文件），再删知识库
+        verify(documentService).deleteAllUnderKnowledgeBase(id);
+        verify(knowledgeBaseRepository).delete(any());
     }
 }

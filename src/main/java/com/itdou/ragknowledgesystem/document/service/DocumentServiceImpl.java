@@ -140,6 +140,33 @@ public class DocumentServiceImpl implements DocumentService {
         log.info("文档删除完成 documentId={}", documentId);
     }
 
+    @Override
+    public int deleteAllUnderKnowledgeBase(UUID knowledgeBaseId) {
+        List<String> storageKeys = documentRepository.findStorageKeysByKnowledgeBaseId(knowledgeBaseId);
+        if (storageKeys.isEmpty()) {
+            log.debug("知识库下没有文档需要清理 knowledgeBaseId={}", knowledgeBaseId);
+            return 0;
+        }
+        log.info("清理知识库下的文档记录与物理文件 knowledgeBaseId={} 文档数={}", knowledgeBaseId, storageKeys.size());
+
+        // 先把数据库的行删掉再删文件：反过来的话数据库失败就会留下有记录但没文件的悬空状态
+        documentRepository.deleteAllByKnowledgeBaseId(knowledgeBaseId);
+
+        int deletedFiles = 0;
+        for (String storageKey : storageKeys) {
+            try {
+                fileStorage.delete(storageKey);
+                deletedFiles++;
+            } catch (RuntimeException exception) {
+                // 单个文件删失败不应该阻断其余文件的清理，记下来人工处理即可
+                log.warn("清理物理文件失败，需要人工确认 storageKey={}", storageKey, exception);
+            }
+        }
+        log.info("知识库文档清理完成 knowledgeBaseId={} 文档数={} 文件数={}",
+                knowledgeBaseId, storageKeys.size(), deletedFiles);
+        return storageKeys.size();
+    }
+
     //检查知识库是否存在
     private void ensureKnowledgeBaseExists(UUID knowledgeBaseId) {
         if (!knowledgeBaseRepository.existsById(knowledgeBaseId)) {

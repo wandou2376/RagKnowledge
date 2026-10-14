@@ -87,4 +87,41 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
             @Param("knowledgeBaseId") UUID knowledgeBaseId,
             @Param("embedding") String embedding,
             @Param("topK") int topK);
+
+    /*
+     * 关键词召回。用 ILIKE 做包含匹配而不是 PostgreSQL 全文检索：
+     * 默认分词器不认识中文，实测整句中文只会被切成一个 token，搜词根本匹配不上，
+     * 镜像里也没有 zhparser 这类中文分词扩展。三元组索引（gin_trgm_ops）能加速 ILIKE '%词%'。
+     *
+     * 排序按「命中词元的长度之和」——长度是「专有性」的粗略代理：
+     * 命中「智能系统学报」显然比命中「中文」更有说服力，而后者几乎每个分块都有。
+     * 不这么做的话，像「中文」这种通用词会把专有词的分辨力稀释掉。
+     *
+     * :terms 是 | 拼接的词元串，由 KeywordTerms 抽取，词元里不会含 | 或 LIKE 通配符。
+     */
+    @Query(value = """
+            SELECT c.id                  AS "chunkId",
+                   c.document_id         AS "documentId",
+                   c.chunk_index         AS "chunkIndex",
+                   c.content             AS "content",
+                   c.page_number_start   AS "pageNumberStart",
+                   c.page_number_end     AS "pageNumberEnd",
+                   c.token_count         AS "tokenCount",
+                   d.original_file_name  AS "originalFileName",
+                   (SELECT coalesce(sum(length(term)), 0)
+                      FROM unnest(string_to_array(:terms, '|')) AS term
+                     WHERE c.content ILIKE '%' || term || '%') AS "score"
+            FROM rag.document_chunk c
+            JOIN rag.document d ON d.id = c.document_id
+            WHERE c.knowledge_base_id = :knowledgeBaseId
+              AND EXISTS (SELECT 1
+                            FROM unnest(string_to_array(:terms, '|')) AS term
+                           WHERE c.content ILIKE '%' || term || '%')
+            ORDER BY "score" DESC, c.chunk_index ASC
+            LIMIT :topK
+            """, nativeQuery = true)
+    List<ChunkSearchProjection> searchByKeywords(
+            @Param("knowledgeBaseId") UUID knowledgeBaseId,
+            @Param("terms") String terms,
+            @Param("topK") int topK);
 }

@@ -13,7 +13,7 @@ import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoun
 import com.itdou.ragknowledgesystem.knowledgebase.repository.KnowledgeBaseRepository;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchRequest;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchResultResponse;
-import com.itdou.ragknowledgesystem.retrieval.service.VectorSearchService;
+import com.itdou.ragknowledgesystem.retrieval.service.ChunkSearchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +39,7 @@ class RagChatServiceImplTest {
     private static final String CONVERSATION_ID = "conv-2026-01";
 
     @Mock
-    private VectorSearchService vectorSearchService;
+    private ChunkSearchService chunkSearchService;
 
     @Mock
     private AnswerGenerator answerGenerator;
@@ -57,7 +57,7 @@ class RagChatServiceImplTest {
     void setUp() {
         // 提示词组装用真实实现，它的行为本来就是断言的一部分
         ragChatService = new RagChatServiceImpl(
-                vectorSearchService, new RagPromptBuilder(), answerGenerator,
+                chunkSearchService, new RagPromptBuilder(), answerGenerator,
                 conversationMemory, knowledgeBaseRepository);
         knowledgeBaseId = UUID.randomUUID();
     }
@@ -129,7 +129,7 @@ class RagChatServiceImplTest {
         ragChatService.ask(knowledgeBaseId, new ChatRequest("问题", 3, null));
 
         // 编排层把提问转换成检索请求，topK 要原样透传
-        verify(vectorSearchService).search(knowledgeBaseId, new SearchRequest("问题", 3));
+        verify(chunkSearchService).search(knowledgeBaseId, new SearchRequest("问题", 3, null));
     }
 
     @Test
@@ -244,11 +244,11 @@ class RagChatServiceImplTest {
     }
 
     private void givenSources(SearchResultResponse... sources) {
-        when(vectorSearchService.search(eq(knowledgeBaseId), any())).thenReturn(List.of(sources));
+        when(chunkSearchService.search(eq(knowledgeBaseId), any())).thenReturn(List.of(sources));
     }
 
     private static SearchResultResponse source(String content) {
         return new SearchResultResponse(UUID.randomUUID(), UUID.randomUUID(), "guide.pdf", 0,
-                content, 1, 2, 100, 0.88);
+                content, 1, 2, 100, 0.88, 0.88, null);
     }
 }

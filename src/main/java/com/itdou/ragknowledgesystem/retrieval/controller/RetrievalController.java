@@ -3,7 +3,7 @@ package com.itdou.ragknowledgesystem.retrieval.controller;
 import com.itdou.ragknowledgesystem.common.response.Result;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchRequest;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchResultResponse;
-import com.itdou.ragknowledgesystem.retrieval.service.VectorSearchService;
+import com.itdou.ragknowledgesystem.retrieval.service.ChunkSearchService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,15 +16,17 @@ import java.util.UUID;
 
 /**
  * 检索接口。用 POST 而不是 GET：问题文本可能较长，放在请求体里比塞进 URL 安全，也不受 URL 长度限制。
+ *
+ * 请求体可以带 mode 选择检索模式：VECTOR（纯语义）、KEYWORD（纯字面命中）、HYBRID（默认，两路融合）。
  */
 @RestController
 @RequestMapping("/api/knowledge-bases")
 public class RetrievalController {
 
-    private final VectorSearchService vectorSearchService;
+    private final ChunkSearchService chunkSearchService;
 
-    public RetrievalController(VectorSearchService vectorSearchService) {
-        this.vectorSearchService = vectorSearchService;
+    public RetrievalController(ChunkSearchService chunkSearchService) {
+        this.chunkSearchService = chunkSearchService;
     }
 
     @PostMapping("/{knowledgeBaseId}/search")
@@ -32,6 +34,6 @@ public class RetrievalController {
             @PathVariable UUID knowledgeBaseId,
             @Valid @RequestBody SearchRequest request
     ) {
-        return Result.success(vectorSearchService.search(knowledgeBaseId, request));
+        return Result.success(chunkSearchService.search(knowledgeBaseId, request));
     }
 }

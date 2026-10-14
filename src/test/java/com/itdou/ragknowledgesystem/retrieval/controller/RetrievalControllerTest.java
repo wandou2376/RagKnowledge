@@ -3,7 +3,7 @@ package com.itdou.ragknowledgesystem.retrieval.controller;
 import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoundException;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchResultResponse;
 import com.itdou.ragknowledgesystem.retrieval.exception.EmbeddingFailedException;
-import com.itdou.ragknowledgesystem.retrieval.service.VectorSearchService;
+import com.itdou.ragknowledgesystem.retrieval.service.ChunkSearchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -39,11 +39,11 @@ class RetrievalControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private VectorSearchService vectorSearchService;
+    private ChunkSearchService chunkSearchService;
 
     @Test
     void searchShouldWrapHitsInEnvelope() throws Exception {
-        given(vectorSearchService.search(eq(KNOWLEDGE_BASE_ID), any())).willReturn(List.of(hit()));
+        given(chunkSearchService.search(eq(KNOWLEDGE_BASE_ID), any())).willReturn(List.of(hit()));
 
         mockMvc.perform(post(SEARCH_URL, KNOWLEDGE_BASE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -63,7 +63,7 @@ class RetrievalControllerTest {
 
     @Test
     void searchShouldReturnEmptyArrayInsideEnvelope() throws Exception {
-        given(vectorSearchService.search(eq(KNOWLEDGE_BASE_ID), any())).willReturn(List.of());
+        given(chunkSearchService.search(eq(KNOWLEDGE_BASE_ID), any())).willReturn(List.of());
 
         mockMvc.perform(post(SEARCH_URL, KNOWLEDGE_BASE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -96,7 +96,7 @@ class RetrievalControllerTest {
 
     @Test
     void searchShouldReturnNotFoundEnvelopeForUnknownKnowledgeBase() throws Exception {
-        given(vectorSearchService.search(eq(KNOWLEDGE_BASE_ID), any()))
+        given(chunkSearchService.search(eq(KNOWLEDGE_BASE_ID), any()))
                 .willThrow(new KnowledgeBaseNotFoundException(KNOWLEDGE_BASE_ID));
 
         mockMvc.perform(post(SEARCH_URL, KNOWLEDGE_BASE_ID)
@@ -110,7 +110,7 @@ class RetrievalControllerTest {
     // Embedding 是外部依赖，它出问题用 503 而不是 500，调用方能区分「依赖不可用」和「服务端 bug」
     @Test
     void searchShouldReturnServiceUnavailableWhenEmbeddingFails() throws Exception {
-        given(vectorSearchService.search(eq(KNOWLEDGE_BASE_ID), any()))
+        given(chunkSearchService.search(eq(KNOWLEDGE_BASE_ID), any()))
                 .willThrow(new EmbeddingFailedException("未配置 Embedding 服务，请先设置环境变量 SILICONFLOW_API_KEY"));
 
         mockMvc.perform(post(SEARCH_URL, KNOWLEDGE_BASE_ID)
@@ -139,6 +139,28 @@ class RetrievalControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_PARAMETER_TYPE"));
     }
 
+    // 响应里要能看出每条结果是哪一通道召回的
+    @Test
+    void searchShouldExposeChannelScores() throws Exception {
+        given(chunkSearchService.search(eq(KNOWLEDGE_BASE_ID), any())).willReturn(List.of(hit()));
+
+        mockMvc.perform(post(SEARCH_URL, KNOWLEDGE_BASE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"问题\",\"mode\":\"VECTOR\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].vectorScore").value(0.87))
+                .andExpect(jsonPath("$.data[0].keywordScore").doesNotExist());
+    }
+
+    @Test
+    void searchShouldReturnEnvelopeForUnknownMode() throws Exception {
+        mockMvc.perform(post(SEARCH_URL, KNOWLEDGE_BASE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"问题\",\"mode\":\"BOGUS\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST_BODY"));
+    }
+
     private static SearchResultResponse hit() {
         return new SearchResultResponse(
                 UUID.fromString("33333333-3333-3333-3333-333333333333"),
@@ -149,7 +171,9 @@ class RetrievalControllerTest {
                 2,
                 3,
                 608,
-                0.87
+                0.87,
+                0.87,
+                null
         );
     }
 }

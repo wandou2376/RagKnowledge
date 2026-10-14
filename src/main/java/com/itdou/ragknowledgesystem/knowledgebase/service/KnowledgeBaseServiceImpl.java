@@ -1,5 +1,6 @@
 package com.itdou.ragknowledgesystem.knowledgebase.service;
 
+import com.itdou.ragknowledgesystem.document.service.DocumentService;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.CreateKnowledgeBaseRequest;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.KnowledgeBaseResponse;
 import com.itdou.ragknowledgesystem.knowledgebase.dto.UpdateKnowledgeBaseRequest;
@@ -20,9 +21,14 @@ import java.util.UUID;
 public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final DocumentService documentService;
 
-    public KnowledgeBaseServiceImpl(KnowledgeBaseRepository knowledgeBaseRepository) {
+    public KnowledgeBaseServiceImpl(
+            KnowledgeBaseRepository knowledgeBaseRepository,
+            DocumentService documentService
+    ) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.documentService = documentService;
     }
 
     //创建知识库
@@ -81,10 +87,18 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
     public void delete(UUID id) {
         log.info("删除知识库 id={}", id);
 
-        knowledgeBaseRepository.delete(findById(id));
+        KnowledgeBase knowledgeBase = findById(id);
 
-        // 知识库下的文档和分块由数据库外键 ON DELETE CASCADE 一并清理
-        log.info("知识库删除完成 id={}", id);
+        /*
+         * 文档记录和分块可以由数据库外键 ON DELETE CASCADE 清理，
+         * 但磁盘上的原文件不在数据库里，必须由应用先删掉，
+         * 否则会出现「知识库删掉了、文件还留在磁盘上」的泄漏。
+         */
+        int deletedDocuments = documentService.deleteAllUnderKnowledgeBase(id);
+
+        knowledgeBaseRepository.delete(knowledgeBase);
+
+        log.info("知识库删除完成 id={} 一并清理文档 {} 个", id, deletedDocuments);
     }
 
     private KnowledgeBase findById(UUID id) {

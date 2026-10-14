@@ -70,7 +70,7 @@ class RagPromptBuilderTest {
     void shouldFallBackWhenPageNumbersAreMissing() {
         RagPrompt prompt = promptBuilder.build("问题", List.of(
                 new SearchResultResponse(UUID.randomUUID(), UUID.randomUUID(), "a.pdf", 0,
-                        "没有页码的内容", null, null, 100, 0.9)), List.of());
+                        "没有页码的内容", null, null, 100, 0.9, 0.9, null)), List.of());
 
         assertThat(prompt.userPrompt()).contains("页码未知").doesNotContain("null");
     }
@@ -84,6 +84,6 @@ class RagPromptBuilderTest {
 
     private static SearchResultResponse source(String content, Integer pageStart, Integer pageEnd) {
         return new SearchResultResponse(UUID.randomUUID(), UUID.randomUUID(), "guide.pdf", 0,
-                content, pageStart, pageEnd, 100, 0.9);
+                content, pageStart, pageEnd, 100, 0.9, 0.9, null);
     }
 }

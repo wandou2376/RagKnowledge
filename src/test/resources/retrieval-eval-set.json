@@ -1,0 +1,57 @@
+[
+  {
+    "question": "这份文档的编制单位是谁？",
+    "expectedChunkIndexes": [0],
+    "note": "答案在首页标题下方"
+  },
+  {
+    "question": "《大数据挖掘与分析》的主办单位是谁？",
+    "expectedChunkIndexes": [0],
+    "note": "T1 类第一本英文期刊"
+  },
+  {
+    "question": "《软件学报》的主办单位是谁？",
+    "expectedChunkIndexes": [1],
+    "note": "T1 类中文期刊第 15 条"
+  },
+  {
+    "question": "《中文信息学报》的主办单位是谁？",
+    "expectedChunkIndexes": [1],
+    "note": "T1 类中文期刊最后一本"
+  },
+  {
+    "question": "《智能系统学报》的主办单位是谁？",
+    "expectedChunkIndexes": [2, 3],
+    "note": "跨分块边界，两个分块都含这条"
+  },
+  {
+    "question": "《机器人》期刊的主办单位是谁？",
+    "expectedChunkIndexes": [3, 4],
+    "note": "T3 类，跨分块边界"
+  },
+  {
+    "question": "《计算机教育》的主办单位是谁？",
+    "expectedChunkIndexes": [1, 2],
+    "note": "T2 类，跨分块边界"
+  },
+  {
+    "question": "《密码与信息安全学报》的主办单位是谁？",
+    "expectedChunkIndexes": [4],
+    "note": "T3 类后段"
+  },
+  {
+    "question": "《中兴通讯技术》的主办单位是谁？",
+    "expectedChunkIndexes": [4],
+    "note": "T3 类最后一本"
+  },
+  {
+    "question": "T3 类里有哪些中文期刊？",
+    "expectedChunkIndexes": [3, 4],
+    "note": "问的是一整个分类，不点名具体期刊"
+  },
+  {
+    "question": "T2 类里有哪些中文期刊？",
+    "expectedChunkIndexes": [1, 2],
+    "note": "问的是一整个分类，不点名具体期刊"
+  }
+]

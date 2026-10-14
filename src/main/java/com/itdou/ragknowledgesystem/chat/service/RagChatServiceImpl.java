@@ -13,7 +13,7 @@ import com.itdou.ragknowledgesystem.knowledgebase.exception.KnowledgeBaseNotFoun
 import com.itdou.ragknowledgesystem.knowledgebase.repository.KnowledgeBaseRepository;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchRequest;
 import com.itdou.ragknowledgesystem.retrieval.dto.SearchResultResponse;
-import com.itdou.ragknowledgesystem.retrieval.service.VectorSearchService;
+import com.itdou.ragknowledgesystem.retrieval.service.ChunkSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -37,20 +37,20 @@ public class RagChatServiceImpl implements RagChatService {
     // 一条参考资料都没召回到时的固定回答。此时不调用模型：既省一次费用，也避免模型脱离上下文自由发挥
     private static final String NO_CONTEXT_ANSWER = "根据现有资料无法回答该问题。";
 
-    private final VectorSearchService vectorSearchService;
+    private final ChunkSearchService chunkSearchService;
     private final RagPromptBuilder promptBuilder;
     private final AnswerGenerator answerGenerator;
     private final ConversationMemory conversationMemory;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
     public RagChatServiceImpl(
-            VectorSearchService vectorSearchService,
+            ChunkSearchService chunkSearchService,
             RagPromptBuilder promptBuilder,
             AnswerGenerator answerGenerator,
             ConversationMemory conversationMemory,
             KnowledgeBaseRepository knowledgeBaseRepository
     ) {
-        this.vectorSearchService = vectorSearchService;
+        this.chunkSearchService = chunkSearchService;
         this.promptBuilder = promptBuilder;
         this.answerGenerator = answerGenerator;
         this.conversationMemory = conversationMemory;
@@ -74,8 +74,8 @@ public class RagChatServiceImpl implements RagChatService {
             log.debug("本次带上 {} 条历史消息 conversationId={}", history.size(), conversationId);
         }
 
-        List<SearchResultResponse> sources = vectorSearchService.search(
-                knowledgeBaseId, new SearchRequest(request.question(), request.topK()));
+        List<SearchResultResponse> sources = chunkSearchService.search(
+                knowledgeBaseId, new SearchRequest(request.question(), request.topK(), null));
 
         String answer;
         List<CitationResponse> citations = List.of();
