@@ -19,7 +19,7 @@
 | 数据存储 | PostgreSQL 17、pgvector、Spring Data JPA、Flyway |
 | 会话记忆 | Redis 7 |
 | 文档解析 | PDFBox 3.0.8 |
-| 聊天模型 | DeepSeek，当前配置为 `deepseek-flash` |
+| 聊天模型 | 任意会话模型，如 DeepSeek等 |
 | 向量模型 | 硅基流动 `BAAI/bge-m3`，1024 维 |
 | 前端 | Vue 3、Vite、Element Plus、vue-router、axios |
 
