@@ -1,6 +1,6 @@
 package com.itdou.ragknowledgesystem.ingestion.chunk;
 
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfPage;
+import com.itdou.ragknowledgesystem.ingestion.parser.ExtractedPage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +28,7 @@ public class TokenChunkSplitter {
         this.properties = properties;
     }
 
-    public List<DocumentChunkDraft> split(List<PdfPage> pages) {
+    public List<DocumentChunkDraft> split(List<ExtractedPage> pages) {
         List<TextSegment> segments = toSegments(pages);
         if (segments.isEmpty()) {
             log.warn("清洗后没有任何可用文本行，无法分块");
@@ -39,15 +39,15 @@ public class TokenChunkSplitter {
         mergeUndersizedTail(groups);
         List<DocumentChunkDraft> drafts = toDrafts(groups);
 
-        log.info("分块完成 文本片段={} 分块数={} 目标大小={} token 重叠={} token",
+        log.debug("分块完成 文本片段={} 分块数={} 目标大小={} token 重叠={} token",
                 segments.size(), drafts.size(), properties.targetTokens(), properties.overlapTokens());
         return drafts;
     }
 
     // 逐行展开成片段；单行本身就超过目标大小时先硬切，保证每个片段不会大于一块
-    private List<TextSegment> toSegments(List<PdfPage> pages) {
+    private List<TextSegment> toSegments(List<ExtractedPage> pages) {
         List<TextSegment> segments = new ArrayList<>();
-        for (PdfPage page : pages) {
+        for (ExtractedPage page : pages) {
             for (String rawLine : page.text().split("\n")) {
                 String line = rawLine.strip();
                 if (line.isEmpty()) {
@@ -141,8 +141,6 @@ public class TokenChunkSplitter {
             int tokenCount = tokenCounter.count(content);
 
             drafts.add(new DocumentChunkDraft(index, content, sha256(content), pageStart, pageEnd, tokenCount));
-            log.debug("生成分块 chunkIndex={} 页码={}-{} 行数={} token={}",
-                    index, pageStart, pageEnd, group.size(), tokenCount);
         }
         return drafts;
     }

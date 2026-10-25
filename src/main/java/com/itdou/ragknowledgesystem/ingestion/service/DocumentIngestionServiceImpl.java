@@ -4,6 +4,7 @@ import com.itdou.ragknowledgesystem.document.dto.DocumentChunkResponse;
 import com.itdou.ragknowledgesystem.document.dto.DocumentParseResponse;
 import com.itdou.ragknowledgesystem.document.entity.Document;
 import com.itdou.ragknowledgesystem.document.entity.DocumentChunk;
+import com.itdou.ragknowledgesystem.document.entity.DocumentFormat;
 import com.itdou.ragknowledgesystem.document.exception.DocumentNotFoundException;
 import com.itdou.ragknowledgesystem.document.exception.DocumentParsingException;
 import com.itdou.ragknowledgesystem.document.repository.DocumentChunkRepository;
@@ -13,8 +14,8 @@ import com.itdou.ragknowledgesystem.ingestion.chunk.ChunkingProperties;
 import com.itdou.ragknowledgesystem.ingestion.chunk.DocumentChunkDraft;
 import com.itdou.ragknowledgesystem.ingestion.chunk.PageTextCleaner;
 import com.itdou.ragknowledgesystem.ingestion.chunk.TokenChunkSplitter;
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfPage;
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfTextExtractor;
+import com.itdou.ragknowledgesystem.ingestion.parser.ExtractedPage;
+import com.itdou.ragknowledgesystem.ingestion.parser.TextExtractor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -25,8 +26,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 文档解析入库的编排。
@@ -42,7 +46,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final FileStorage fileStorage;
-    private final PdfTextExtractor pdfTextExtractor;
+    private final Map<DocumentFormat, TextExtractor> extractors;
     private final PageTextCleaner pageTextCleaner;
     private final TokenChunkSplitter tokenChunkSplitter;
     private final ChunkingProperties chunkingProperties;
@@ -52,7 +56,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
             DocumentRepository documentRepository,
             DocumentChunkRepository documentChunkRepository,
             FileStorage fileStorage,
-            PdfTextExtractor pdfTextExtractor,
+            List<TextExtractor> extractors,
             PageTextCleaner pageTextCleaner,
             TokenChunkSplitter tokenChunkSplitter,
             ChunkingProperties chunkingProperties,
@@ -61,7 +65,9 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.fileStorage = fileStorage;
-        this.pdfTextExtractor = pdfTextExtractor;
+        // 每种格式一个实现，按 format 建索引。重复的 format 会在启动时就暴露出来
+        this.extractors = extractors.stream()
+                .collect(Collectors.toMap(TextExtractor::format, Function.identity()));
         this.pageTextCleaner = pageTextCleaner;
         this.tokenChunkSplitter = tokenChunkSplitter;
         this.chunkingProperties = chunkingProperties;
@@ -71,50 +77,58 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
     @Override
     public DocumentParseResponse parse(UUID documentId) {
         Document document = loadDocument(documentId);
-        log.info("开始解析文档 documentId={} fileName={}", documentId, document.getOriginalFileName());
 
-        Path pdfPath = fileStorage.loadPath(document.getStorageKey());
+        Path sourcePath = fileStorage.loadPath(document.getStorageKey());
 
         // 先落 PARSING 状态，这样解析期间查文档能看到进度，而不是一直停在 PENDING
         markParsing(documentId);
-        log.debug("文档状态已置为 PARSING documentId={}", documentId);
 
-        List<PdfPage> pages;
+        List<ExtractedPage> pages;
         List<DocumentChunkDraft> drafts;
         int emptyPageCount;
         try {
-            pages = pdfTextExtractor.extract(pdfPath);
+            TextExtractor extractor = extractorFor(document);
+            pages = extractor.extract(sourcePath);
             emptyPageCount = (int) pages.stream().filter(page -> !page.hasText()).count();
-            log.info("PDF 文本提取完成 documentId={} 总页数={} 无文本页数={}",
-                    documentId, pages.size(), emptyPageCount);
 
-            List<PdfPage> cleanedPages = pageTextCleaner.clean(pages, chunkingProperties);
+            List<ExtractedPage> cleanedPages = pageTextCleaner.clean(pages, chunkingProperties);
             drafts = tokenChunkSplitter.split(cleanedPages);
-            log.info("文本清洗与分块完成 documentId={} 分块数={}", documentId, drafts.size());
 
             if (drafts.isEmpty()) {
-                log.warn("未从 PDF 中提取到任何可用文本 documentId={}", documentId);
-                throw new DocumentParsingException("未从 PDF 中提取到任何文本，可能是扫描版或图片型 PDF");
+                // 不要单独打 warn：下面的 catch 会用同一个原因打 error，两行说的是同一件事
+                throw new DocumentParsingException(
+                        "未从 " + document.getOriginalFileName() + " 中提取到任何文本，"
+                                + "可能是扫描版 / 图片型 PDF，或内容全是空表格");
             }
         } catch (RuntimeException exception) {
-            log.error("文档解析失败 documentId={} 原因={}", documentId, exception.getMessage(), exception);
+            // 这里的 documentId 是全局出口拿不到的上下文，所以错误日志留在这层；
+            // 异常对象自己会打出 message，不要再单独传一遍
+            log.error("文档解析失败 documentId={}", documentId, exception);
             // 失败原因要留在文档上，否则调用方只能看到一个 4xx/5xx，查不到为什么
             markFailed(documentId, exception.getMessage());
             if (exception instanceof DocumentParsingException parsingException) {
                 throw parsingException;
             }
-            throw new DocumentParsingException("解析 PDF 失败: " + exception.getMessage(), exception);
+            throw new DocumentParsingException("解析文档失败: " + exception.getMessage(), exception);
         }
 
         return persist(documentId, document.getKnowledgeBaseId(), drafts, pages.size(), emptyPageCount);
     }
 
+    private TextExtractor extractorFor(Document document) {
+        DocumentFormat format = DocumentFormat.fromMediaType(document.getMediaType())
+                .orElseThrow(() -> new DocumentParsingException(
+                        "不支持的文档格式: " + document.getMediaType()));
+        TextExtractor extractor = extractors.get(format);
+        if (extractor == null) {
+            throw new DocumentParsingException("缺少 " + format.extension() + " 格式的解析器");
+        }
+        return extractor;
+    }
+
     @Override
     public List<DocumentChunkResponse> listChunks(UUID documentId) {
-        log.debug("查询文档分块 documentId={}", documentId);
-
         if (!documentRepository.existsById(documentId)) {
-            log.warn("文档不存在，查询分块被拒绝 documentId={}", documentId);
             throw new DocumentNotFoundException(documentId);
         }
 
@@ -124,7 +138,8 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
                 .map(DocumentIngestionServiceImpl::toResponse)
                 .toList();
 
-        log.info("查询文档分块完成 documentId={} 共 {} 条", documentId, chunks.size());
+        // 读接口，开抽屉就会调一次，细节放 debug
+        log.debug("查询文档分块 documentId={} 共 {} 条", documentId, chunks.size());
         return chunks;
     }
 
@@ -164,7 +179,6 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
             log.debug("分块去重完成 documentId={} 实际写入={} 去重跳过={}",
                     documentId, chunks.size(), drafts.size() - chunks.size());
             documentChunkRepository.saveAll(chunks);
-            log.debug("分块已写入 document_chunk documentId={} 条数={}", documentId, chunks.size());
 
             // 重新取一次托管态实体再改状态：进入事务的实体是游离对象
             Document managed = documentRepository.findById(documentId)
@@ -197,7 +211,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         try {
             transactionTemplate.executeWithoutResult(status -> documentRepository.findById(documentId)
                     .ifPresent(document -> document.markFailed(message)));
-            log.debug("文档状态已置为 FAILED documentId={} errorMessage={}", documentId, message);
+            log.debug("文档状态已置为 FAILED documentId={}", documentId);
         } catch (RuntimeException exception) {
             // 回写状态失败不应该盖掉真正的解析异常，记日志后继续抛原始异常
             log.warn("回写文档解析失败状态时出错 documentId={}", documentId, exception);

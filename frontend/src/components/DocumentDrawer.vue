@@ -13,14 +13,14 @@
         :closable="false"
         show-icon
         class="hint"
-        title="上传只保存文件；解析和向量化是分开的两步。解析是同步接口，页数多的 PDF 会等一会儿。"
+        title="上传只保存文件；解析和向量化是分开的两步。解析是同步接口，页数多或表格大的文档会等一会儿。"
       />
 
       <div class="toolbar">
-        <el-upload :show-file-list="false" :http-request="doUpload" accept="application/pdf">
-          <el-button type="primary" :loading="uploading">上传 PDF</el-button>
+        <el-upload :show-file-list="false" :http-request="doUpload" accept=".pdf,.docx,.xlsx">
+          <el-button type="primary" :loading="uploading">上传文档</el-button>
         </el-upload>
-        <span class="muted">仅支持 PDF，单个文件不超过 50MB</span>
+        <span class="muted">支持 PDF / Word（.docx）/ Excel（.xlsx），单个文件不超过 50MB</span>
       </div>
 
       <el-table v-loading="loading" :data="documents" empty-text="还没有文档" height="calc(100vh - 230px)">
@@ -54,14 +54,14 @@
       <div class="toolbar">
         <el-button @click="view = 'list'">← 返回文档列表</el-button>
         <span v-if="lastParse" class="muted">
-          共 {{ lastParse.pageCount }} 页，切出 {{ lastParse.chunkCount }} 个分块，
+          共 {{ lastParse.pageCount }}{{ locatorSuffix(chunkDocumentName) }}，切出 {{ lastParse.chunkCount }} 个分块，
           去重跳过 {{ lastParse.duplicateChunkCount }} 个
         </span>
       </div>
       <el-table v-loading="chunksLoading" :data="chunks" empty-text="还没有分块" height="calc(100vh - 230px)">
         <el-table-column prop="chunkIndex" label="#" width="60" />
-        <el-table-column label="页码" width="100">
-          <template #default="{ row }">{{ formatPages(row.pageNumberStart, row.pageNumberEnd) }}</template>
+        <el-table-column label="位置" width="120">
+          <template #default="{ row }">{{ formatPages(row.pageNumberStart, row.pageNumberEnd, chunkDocumentName) }}</template>
         </el-table-column>
         <el-table-column prop="tokenCount" label="token" width="70" />
         <el-table-column prop="content" label="内容" min-width="380">
@@ -86,9 +86,10 @@ import {
   uploadDocument
 } from '../api/document'
 import { useWorkspace } from '../composables/useWorkspace'
-import { formatPages, formatSize, PARSE_STATUS } from '../utils/format'
+import { formatPages, formatSize, locatorSuffix, PARSE_STATUS } from '../utils/format'
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.xlsx']
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
@@ -144,9 +145,10 @@ watch(currentKnowledgeBaseId, () => {
 const close = (visible) => emit('update:modelValue', visible)
 
 const doUpload = async ({ file }) => {
-  // 后端也会校验，这里先拦一道只是为了少一次无谓的往返
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    ElMessage.error('只支持 PDF 文件')
+  // 后端也会校验（包括压缩包内部结构），这里先拦一道只是为了少一次无谓的往返
+  const name = (file.name || '').toLowerCase()
+  if (!SUPPORTED_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+    ElMessage.error('只支持 PDF、Word（.docx）和 Excel（.xlsx）文件')
     return
   }
   if (file.size > MAX_UPLOAD_BYTES) {

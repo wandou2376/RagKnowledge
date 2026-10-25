@@ -34,6 +34,8 @@
         <spring-ai.version>1.0.0</spring-ai.version>
         <!-- Spring Boot 的依赖管理里没有 PDFBox，需要自己锁定版本 -->
         <pdfbox.version>3.0.8</pdfbox.version>
+        <!-- POI 5.x 是稳定线；6.0.0 刚发布，不在这个项目里当小白鼠 -->
+        <poi.version>5.5.1</poi.version>
     </properties>
     <dependencies>
         <dependency>
@@ -74,11 +76,19 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
-        <!-- PDF 按页提取文本，阶段 3 只支持 PDF 格式 -->
+        <!-- PDF 按页提取文本 -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
+        </dependency>
+        <!-- Word(.docx) 与 Excel(.xlsx) 提取文本。只引 ooxml 包：
+             它同时提供 XWPF（docx）和 XSSF（xlsx）；老式的 .doc/.xls 需要 poi-scratchpad，
+             这两个格式已被上传校验明确拒绝，所以不引 -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

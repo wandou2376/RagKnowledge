@@ -1,5 +1,6 @@
 package com.itdou.ragknowledgesystem.document.storage;
 
+import com.itdou.ragknowledgesystem.document.entity.DocumentFormat;
 import com.itdou.ragknowledgesystem.document.exception.DocumentStorageException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,10 +29,9 @@ public class LocalFileStorage implements FileStorage {
     }
 
     @Override
-    public String storePdf(MultipartFile file) {
-        String storageKey = LocalDate.now().format(DATE_PATH_FORMAT) + "/" + UUID.randomUUID() + ".pdf";
+    public String store(MultipartFile file, DocumentFormat format) {
+        String storageKey = LocalDate.now().format(DATE_PATH_FORMAT) + "/" + UUID.randomUUID() + format.extension();
         Path targetPath = resolve(storageKey);
-        log.debug("准备写入上传文件 storageKey={} 目标路径={}", storageKey, targetPath);
 
         try {
             Files.createDirectories(targetPath.getParent());
@@ -65,7 +65,6 @@ public class LocalFileStorage implements FileStorage {
             log.error("待解析的物理文件不存在 storageKey={} 期望路径={}", storageKey, path);
             throw new DocumentStorageException("已存文件不存在: " + storageKey, null);
         }
-        log.debug("读取已存文件 storageKey={} 路径={}", storageKey, path);
         return path;
     }
 

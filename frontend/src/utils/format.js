@@ -13,11 +13,21 @@ export const formatSize = (bytes) => {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
+/**
+ * 定位单位随格式变化：Excel 的分块按工作表定位，PDF 和 Word 按页定位。
+ * 后端 pageNumber 的语义就是这个——文档对应的自然定位单元。
+ */
+export const locatorSuffix = (fileName) => {
+  const name = (fileName || '').toLowerCase()
+  return name.endsWith('.xlsx') ? '个工作表' : '页'
+}
+
 /** 页码可能为空（分块没有页码信息时），空的时候要显示得比 null 好看 */
-export const formatPages = (start, end) => {
-  if (start == null) return '页码未知'
-  if (end == null || end === start) return `第 ${start} 页`
-  return `第 ${start}-${end} 页`
+export const formatPages = (start, end, fileName) => {
+  if (start == null) return '位置未知'
+  const suffix = locatorSuffix(fileName)
+  if (end == null || end === start) return `第 ${start} ${suffix}`
+  return `第 ${start}-${end} ${suffix}`
 }
 
 export const formatScore = (value) => (value == null ? '-' : Number(value).toFixed(4))

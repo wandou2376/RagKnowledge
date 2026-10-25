@@ -1,7 +1,6 @@
 package com.itdou.ragknowledgesystem.retrieval.vector;
 
 import com.itdou.ragknowledgesystem.retrieval.exception.EmbeddingFailedException;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Java 浮点数组与 pgvector 字面量之间的转换。
@@ -9,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
  * 为什么需要它：pgvector 的 JDBC 驱动没有内置支持，向量要以字符串字面量（形如 [0.1,0.2]）
  * 传进去再在 SQL 里 CAST 成 vector，所以写入前必须先拼字符串。
  */
-@Slf4j
 public final class VectorLiteral {
 
     // float 的十进制展开最长约 15 个字符，预分配容量避免频繁扩容

@@ -1,7 +1,6 @@
 package com.itdou.ragknowledgesystem.retrieval.service;
 
 import com.itdou.ragknowledgesystem.document.dto.ChunkEmbeddingResponse;
-import com.itdou.ragknowledgesystem.document.entity.Document;
 import com.itdou.ragknowledgesystem.document.entity.DocumentChunk;
 import com.itdou.ragknowledgesystem.document.exception.DocumentNotFoundException;
 import com.itdou.ragknowledgesystem.document.repository.DocumentChunkRepository;
@@ -58,10 +57,8 @@ public class ChunkEmbeddingServiceImpl implements ChunkEmbeddingService {
             throw new EmbeddingFailedException("未配置 Embedding 服务，请先设置环境变量 SILICONFLOW_API_KEY");
         }
 
-        Document document = documentRepository.findById(documentId)
+        documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
-        log.info("开始向量化文档 documentId={} fileName={} model={}",
-                documentId, document.getOriginalFileName(), properties.model());
 
         List<DocumentChunk> pending = documentChunkRepository
                 .findChunksNeedingEmbedding(documentId, properties.model());
@@ -73,7 +70,6 @@ public class ChunkEmbeddingServiceImpl implements ChunkEmbeddingService {
             return new ChunkEmbeddingResponse(documentId, properties.model(), properties.dimension(),
                     0, alreadyEmbeddedCount, null);
         }
-        log.info("待向量化分块 {} 个 documentId={} 批大小={}", pending.size(), documentId, properties.batchSize());
 
         int embeddedCount = 0;
         for (int start = 0; start < pending.size(); start += properties.batchSize()) {
@@ -95,7 +91,7 @@ public class ChunkEmbeddingServiceImpl implements ChunkEmbeddingService {
         try {
             vectors = embeddingModel.embed(contents);
         } catch (RuntimeException exception) {
-            log.error("调用 Embedding 服务失败 批大小={}", batch.size(), exception);
+            // 异常堆栈由 GlobalExceptionHandler 统一打（那里把它映射成 503），这里重复打只会多一份堆栈
             throw new EmbeddingFailedException("调用 Embedding 服务失败: " + exception.getMessage(), exception);
         }
         if (vectors.size() != batch.size()) {

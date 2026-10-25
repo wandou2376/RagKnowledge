@@ -34,8 +34,6 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
     //创建知识库
     @Override
     public KnowledgeBaseResponse create(CreateKnowledgeBaseRequest request) {
-        log.info("创建知识库 name={}", request.name());
-
         KnowledgeBase knowledgeBase = KnowledgeBase.create(request.name(), request.description());
         KnowledgeBaseResponse response = toResponse(knowledgeBaseRepository.save(knowledgeBase));
 
@@ -47,15 +45,13 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
     @Override
     @Transactional(readOnly = true)//只读事务，表示该方法只做查询，不需要修改数据库。
     public List<KnowledgeBaseResponse> list() {
-        log.debug("查询知识库列表");
-
         List<KnowledgeBaseResponse> knowledgeBases = knowledgeBaseRepository
                 .findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
                 .stream()
                 .map(this::toResponse)
                 .toList();
 
-        log.info("查询知识库列表完成 共 {} 条", knowledgeBases.size());
+        log.debug("查询知识库列表 共 {} 条", knowledgeBases.size());
         return knowledgeBases;
     }
 
@@ -63,30 +59,24 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
     @Override
     @Transactional(readOnly = true)
     public KnowledgeBaseResponse getById(UUID id) {
-        log.debug("查询知识库详情 id={}", id);
-
         return toResponse(findById(id));
     }
 
     //更新已有知识库
     @Override
     public KnowledgeBaseResponse update(UUID id, UpdateKnowledgeBaseRequest request) {
-        log.info("更新知识库 id={} name={} status={}", id, request.name(), request.status());
-
         KnowledgeBase knowledgeBase = findById(id);
         knowledgeBase.update(request.name(), request.description(), request.status());
 
         // 托管实体的改动由脏检查在事务提交时写库，这里不需要显式 save
         KnowledgeBaseResponse response = toResponse(knowledgeBase);
-        log.info("知识库更新完成 id={}", response.id());
+        log.info("知识库更新完成 id={} name={} status={}", response.id(), response.name(), response.status());
         return response;
     }
 
     //删除已有知识库
     @Override
     public void delete(UUID id) {
-        log.info("删除知识库 id={}", id);
-
         KnowledgeBase knowledgeBase = findById(id);
 
         /*

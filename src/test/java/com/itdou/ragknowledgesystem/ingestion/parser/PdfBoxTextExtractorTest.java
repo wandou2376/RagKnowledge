@@ -17,14 +17,14 @@ class PdfBoxTextExtractorTest {
 
     @Test
     void shouldExtractEveryPageWithSequentialPageNumbers() throws Exception {
-        List<PdfPage> pages = extractor.extract(resourcePath("test.pdf"));
+        List<ExtractedPage> pages = extractor.extract(resourcePath("test.pdf"));
 
         assertThat(pages).isNotEmpty();
         // 页码必须严格等于物理页序，引用溯源依赖这一点
         for (int index = 0; index < pages.size(); index++) {
             assertThat(pages.get(index).pageNumber()).isEqualTo(index + 1);
         }
-        assertThat(pages.stream().filter(PdfPage::hasText)).as("test.pdf 中至少有页面能提取到文本").isNotEmpty();
+        assertThat(pages.stream().filter(ExtractedPage::hasText)).as("test.pdf 中至少有页面能提取到文本").isNotEmpty();
     }
 
     @Test

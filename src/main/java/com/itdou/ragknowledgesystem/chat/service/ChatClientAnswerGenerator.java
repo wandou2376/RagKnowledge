@@ -39,7 +39,7 @@ public class ChatClientAnswerGenerator implements AnswerGenerator {
                     .call()
                     .chatResponse();
         } catch (RuntimeException exception) {
-            log.error("调用聊天模型失败", exception);
+            // 堆栈统一由 GlobalExceptionHandler 打（映射成 503），这里不再重复记录
             throw new AnswerGenerationException("调用聊天模型失败: " + exception.getMessage(), exception);
         }
 

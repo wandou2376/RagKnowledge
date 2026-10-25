@@ -56,7 +56,7 @@
         <div class="hit-head">
           <span class="rank">{{ index + 1 }}</span>
           <span class="file">{{ item.originalFileName }}</span>
-          <span class="meta">{{ formatPages(item.pageNumberStart, item.pageNumberEnd) }}</span>
+          <span class="meta">{{ formatPages(item.pageNumberStart, item.pageNumberEnd, item.originalFileName) }}</span>
           <span class="meta">分块 #{{ item.chunkIndex }}</span>
           <span class="meta">{{ item.tokenCount }} token</span>
           <span class="scores">

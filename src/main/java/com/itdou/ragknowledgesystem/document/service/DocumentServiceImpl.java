@@ -2,6 +2,7 @@ package com.itdou.ragknowledgesystem.document.service;
 
 import com.itdou.ragknowledgesystem.document.dto.DocumentResponse;
 import com.itdou.ragknowledgesystem.document.entity.Document;
+import com.itdou.ragknowledgesystem.document.entity.DocumentFormat;
 import com.itdou.ragknowledgesystem.document.exception.DocumentNotFoundException;
 import com.itdou.ragknowledgesystem.document.exception.DuplicateDocumentException;
 import com.itdou.ragknowledgesystem.document.exception.InvalidDocumentException;
@@ -22,14 +23,17 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Service
 @Transactional
 @Slf4j
 public class DocumentServiceImpl implements DocumentService {
 
-    private static final int PDF_HEADER_SCAN_SIZE = 1_024;
-    private static final String PDF_MEDIA_TYPE = "application/pdf";
+    private static final int MAGIC_HEADER_SCAN_SIZE = 1_024;
+    private static final byte[] PDF_MAGIC = {'%', 'P', 'D', 'F', '-'};
+    private static final byte[] ZIP_MAGIC = {'P', 'K', 0x03, 0x04};
 
     private final DocumentRepository documentRepository;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -50,18 +54,11 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public DocumentResponse upload(UUID knowledgeBaseId, MultipartFile file) {
-        log.info("收到文档上传请求 knowledgeBaseId={} fileName={} size={} 字节",
-                knowledgeBaseId,
-                file == null ? null : file.getOriginalFilename(),
-                file == null ? null : file.getSize());
-
         ensureKnowledgeBaseExists(knowledgeBaseId);
-        validatePdf(file);
-        log.debug("文件校验通过 fileName={} mediaType={}", file.getOriginalFilename(), file.getContentType());
+        DocumentFormat format = validateDocument(file);
 
         //检查重复文件，JPA会根据方法名进行查询
         String fileHash = calculateSha256(file);
-        log.debug("文件哈希计算完成 fileName={} fileHash={}", file.getOriginalFilename(), fileHash);
 
         if (documentRepository.existsByKnowledgeBaseIdAndFileHash(knowledgeBaseId, fileHash)) {
             log.warn("知识库中已存在相同文件，拒绝上传 knowledgeBaseId={} fileName={} fileHash={}",
@@ -69,21 +66,22 @@ public class DocumentServiceImpl implements DocumentService {
             throw new DuplicateDocumentException();
         }
 
-        String storageKey = fileStorage.storePdf(file);//存储路径
-        log.info("原文件已保存 storageKey={}", storageKey);
+        String storageKey = fileStorage.store(file, format);//存储路径
+        log.debug("原文件已保存 storageKey={}", storageKey);
 
         try {
             Document document = Document.pending(
                     knowledgeBaseId,
                     originalFileName(file),
                     storageKey,
-                    PDF_MEDIA_TYPE,
+                    format.mediaType(),
                     file.getSize(),
                     fileHash
             );
             DocumentResponse response = toResponse(documentRepository.saveAndFlush(document));
-            log.info("文档记录已创建 documentId={} parseStatus={}（等待调用解析接口）",
-                    response.id(), response.parseStatus());
+            // 一次上传只在成功这里打一行，把 id、文件名和后续状态放在一起
+            log.info("文档上传完成 documentId={} fileName={} parseStatus={}（解析需另调接口）",
+                    response.id(), response.originalFileName(), response.parseStatus());
             return response;
         } catch (RuntimeException exception) {
             // 数据库记录没建成，就不要把文件留在磁盘上
@@ -102,8 +100,6 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public List<DocumentResponse> listByKnowledgeBaseId(UUID knowledgeBaseId) {
-        log.debug("查询知识库文档列表 knowledgeBaseId={}", knowledgeBaseId);
-
         ensureKnowledgeBaseExists(knowledgeBaseId);
         List<DocumentResponse> documents = documentRepository
                 .findByKnowledgeBaseIdOrderByCreatedAtDesc(knowledgeBaseId)
@@ -111,7 +107,8 @@ public class DocumentServiceImpl implements DocumentService {
                 .map(this::toResponse)
                 .toList();
 
-        log.info("查询知识库文档列表完成 knowledgeBaseId={} 共 {} 条", knowledgeBaseId, documents.size());
+        // 读接口会被前端每次切知识库、开抽屉时调用，放 debug 才不会刷屏
+        log.debug("查询知识库文档列表 knowledgeBaseId={} 共 {} 条", knowledgeBaseId, documents.size());
         return documents;
     }
 
@@ -119,16 +116,12 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public DocumentResponse getById(UUID documentId) {
-        log.debug("查询文档详情 documentId={}", documentId);
-
         return toResponse(findById(documentId));
     }
 
     //删除文档
     @Override
     public void delete(UUID documentId) {
-        log.info("删除文档 documentId={}", documentId);
-
         Document document = findById(documentId);
 
         // 先 flush 再删物理文件：数据库删失败时，文件必须还在，否则会出现记录还在但文件没了
@@ -147,7 +140,6 @@ public class DocumentServiceImpl implements DocumentService {
             log.debug("知识库下没有文档需要清理 knowledgeBaseId={}", knowledgeBaseId);
             return 0;
         }
-        log.info("清理知识库下的文档记录与物理文件 knowledgeBaseId={} 文档数={}", knowledgeBaseId, storageKeys.size());
 
         // 先把数据库的行删掉再删文件：反过来的话数据库失败就会留下有记录但没文件的悬空状态
         documentRepository.deleteAllByKnowledgeBaseId(knowledgeBaseId);
@@ -162,7 +154,8 @@ public class DocumentServiceImpl implements DocumentService {
                 log.warn("清理物理文件失败，需要人工确认 storageKey={}", storageKey, exception);
             }
         }
-        log.info("知识库文档清理完成 knowledgeBaseId={} 文档数={} 文件数={}",
+        // 汇总交调用方（KnowledgeBaseServiceImpl.delete）打，一次删除只出一条 info
+        log.debug("知识库文档清理完成 knowledgeBaseId={} 文档数={} 文件数={}",
                 knowledgeBaseId, storageKeys.size(), deletedFiles);
         return storageKeys.size();
     }
@@ -170,7 +163,7 @@ public class DocumentServiceImpl implements DocumentService {
     //检查知识库是否存在
     private void ensureKnowledgeBaseExists(UUID knowledgeBaseId) {
         if (!knowledgeBaseRepository.existsById(knowledgeBaseId)) {
-            log.warn("知识库不存在，操作被拒绝 knowledgeBaseId={}", knowledgeBaseId);
+            // 这是 4xx，异常消息里已经带了 id，交给全局出口记一条 debug 就够了
             throw new KnowledgeBaseNotFoundException(knowledgeBaseId);
         }
     }
@@ -180,8 +173,8 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
     }
 
-    //校验PDF
-    private void validatePdf(MultipartFile file) {
+    //校验文档：先看扩展名，再按格式核对文件内部特征
+    private DocumentFormat validateDocument(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new InvalidDocumentException("上传文件不能为空");
         }
@@ -189,29 +182,80 @@ public class DocumentServiceImpl implements DocumentService {
             log.warn("上传文件超过大小上限 size={} 字节 上限={} 字节", file.getSize(), maxFileSizeBytes);
             throw new InvalidDocumentException("上传文件超过大小上限");
         }
-        if (!originalFileName(file).toLowerCase().endsWith(".pdf")) {
-            throw new InvalidDocumentException("只支持 PDF 格式的文件");
+        String fileName = originalFileName(file);
+        DocumentFormat format = DocumentFormat.fromFileName(fileName)
+                .orElseThrow(() -> new InvalidDocumentException(
+                        "只支持 " + DocumentFormat.supportedExtensions() + "，不支持其他格式"));
+
+        if (format == DocumentFormat.PDF) {
+            checkPdfMagic(file);
+        } else {
+            checkOoxmlPart(file, format);
         }
-        if (!hasPdfHeader(file)) {
-            throw new InvalidDocumentException("上传内容不是有效的 PDF 文件");
-        }
+        return format;
     }
 
     //在前1024个字节里查找%PDF-
-    private boolean hasPdfHeader(MultipartFile file) {
+    private void checkPdfMagic(MultipartFile file) {
         try (InputStream inputStream = file.getInputStream()) {
-            byte[] header = inputStream.readNBytes(PDF_HEADER_SCAN_SIZE);
-            for (int index = 0; index <= header.length - 5; index++) {
-                if (header[index] == '%' && header[index + 1] == 'P' && header[index + 2] == 'D'
-                        && header[index + 3] == 'F' && header[index + 4] == '-') {
-                    return true;
+            byte[] header = inputStream.readNBytes(MAGIC_HEADER_SCAN_SIZE);
+            for (int index = 0; index <= header.length - PDF_MAGIC.length; index++) {
+                if (matchesAt(header, index, PDF_MAGIC)) {
+                    return;
                 }
             }
-            return false;
         } catch (IOException exception) {
             log.error("读取上传文件内容失败 fileName={}", file.getOriginalFilename(), exception);
             throw new InvalidDocumentException("读取上传文件失败");
         }
+        throw new InvalidDocumentException("上传内容不是有效的 PDF 文件");
+    }
+
+    /*
+     * docx / xlsx 都是 ZIP 容器。只看 ZIP 魔数不够——任何压缩包都能改个后缀传上来，
+     * 所以再进压缩包里确认主部件（word/document.xml 或 xl/workbook.xml）存在。
+     * 这一步把「上传成功、解析时才炸」提前成了上传即拒绝。
+     */
+    private void checkOoxmlPart(MultipartFile file, DocumentFormat format) {
+        boolean requiredPartFound = false;
+        try (InputStream inputStream = file.getInputStream()) {
+            byte[] magic = inputStream.readNBytes(ZIP_MAGIC.length);
+            if (!matchesAt(magic, 0, ZIP_MAGIC)) {
+                throw new InvalidDocumentException("上传内容与文件扩展名不符，不是有效的 " + format.extension() + " 文件");
+            }
+        } catch (IOException exception) {
+            log.error("读取上传文件内容失败 fileName={}", file.getOriginalFilename(), exception);
+            throw new InvalidDocumentException("读取上传文件失败");
+        }
+
+        try (ZipInputStream zipStream = new ZipInputStream(file.getInputStream())) {
+            ZipEntry entry;
+            while ((entry = zipStream.getNextEntry()) != null) {
+                if (format.requiredZipPart().equals(entry.getName())) {
+                    requiredPartFound = true;
+                    break;
+                }
+            }
+        } catch (IOException exception) {
+            log.error("读取 OOXML 压缩包失败 fileName={}", file.getOriginalFilename(), exception);
+            throw new InvalidDocumentException("读取上传文件失败");
+        }
+
+        if (!requiredPartFound) {
+            throw new InvalidDocumentException("上传内容与文件扩展名不符，不是有效的 " + format.extension() + " 文件");
+        }
+    }
+
+    private static boolean matchesAt(byte[] source, int offset, byte[] expected) {
+        if (source.length - offset < expected.length) {
+            return false;
+        }
+        for (int index = 0; index < expected.length; index++) {
+            if (source[offset + index] != expected[index]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     //计算SHA-256，判断一个知识库中是否上传过一个完全相同的文件

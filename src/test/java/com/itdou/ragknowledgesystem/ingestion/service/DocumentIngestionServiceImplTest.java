@@ -3,6 +3,7 @@ package com.itdou.ragknowledgesystem.ingestion.service;
 import com.itdou.ragknowledgesystem.document.dto.DocumentParseResponse;
 import com.itdou.ragknowledgesystem.document.entity.Document;
 import com.itdou.ragknowledgesystem.document.entity.DocumentChunk;
+import com.itdou.ragknowledgesystem.document.entity.DocumentFormat;
 import com.itdou.ragknowledgesystem.document.entity.DocumentParseStatus;
 import com.itdou.ragknowledgesystem.document.exception.DocumentNotFoundException;
 import com.itdou.ragknowledgesystem.document.exception.DocumentParsingException;
@@ -12,8 +13,8 @@ import com.itdou.ragknowledgesystem.document.storage.FileStorage;
 import com.itdou.ragknowledgesystem.ingestion.chunk.ChunkingProperties;
 import com.itdou.ragknowledgesystem.ingestion.chunk.PageTextCleaner;
 import com.itdou.ragknowledgesystem.ingestion.chunk.TokenChunkSplitter;
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfPage;
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfTextExtractor;
+import com.itdou.ragknowledgesystem.ingestion.parser.ExtractedPage;
+import com.itdou.ragknowledgesystem.ingestion.parser.TextExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,7 @@ class DocumentIngestionServiceImplTest {
     private FileStorage fileStorage;
 
     @Mock
-    private PdfTextExtractor pdfTextExtractor;
+    private TextExtractor textExtractor;
 
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -69,12 +70,14 @@ class DocumentIngestionServiceImplTest {
     @BeforeEach
     void setUp() {
         ChunkingProperties properties = new ChunkingProperties(600, 80, 120, 0.6, 3);
+        // 服务构造时会用 format() 建索引，所以必须在构造之前桩好
+        when(textExtractor.format()).thenReturn(DocumentFormat.PDF);
         // 用真实的清洗器和分块器，只把数据库和文件存储替换成 mock
         ingestionService = new DocumentIngestionServiceImpl(
                 documentRepository,
                 documentChunkRepository,
                 fileStorage,
-                pdfTextExtractor,
+                List.of(textExtractor),
                 new PageTextCleaner(),
                 new TokenChunkSplitter(properties),
                 properties,
@@ -93,7 +96,7 @@ class DocumentIngestionServiceImplTest {
     void parseShouldPersistChunksAndMarkDocumentCompleted() {
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
         when(fileStorage.loadPath(STORAGE_KEY)).thenReturn(Path.of("stored.pdf"));
-        when(pdfTextExtractor.extract(any())).thenReturn(List.of(new PdfPage(1, PAGE_TEXT)));
+        when(textExtractor.extract(any())).thenReturn(List.of(new ExtractedPage(1, PAGE_TEXT)));
         when(documentChunkRepository.findContentHashesByKnowledgeBaseId(knowledgeBaseId)).thenReturn(Set.of());
 
         DocumentParseResponse response = ingestionService.parse(documentId);
@@ -127,15 +130,15 @@ class DocumentIngestionServiceImplTest {
     void parseShouldFailWhenPdfHasNoExtractableText() {
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
         when(fileStorage.loadPath(STORAGE_KEY)).thenReturn(Path.of("scanned.pdf"));
-        when(pdfTextExtractor.extract(any())).thenReturn(List.of(new PdfPage(1, "   ")));
+        when(textExtractor.extract(any())).thenReturn(List.of(new ExtractedPage(1, "   ")));
 
         assertThatThrownBy(() -> ingestionService.parse(documentId))
                 .isInstanceOf(DocumentParsingException.class)
-                .hasMessageContaining("未从 PDF 中提取到任何文本");
+                .hasMessageContaining("未从 guide.pdf 中提取到任何文本");
 
         // 失败原因要写回文档，否则调用方查不到为什么失败
         assertThat(document.getParseStatus()).isEqualTo(DocumentParseStatus.FAILED);
-        assertThat(document.getErrorMessage()).contains("未从 PDF 中提取到任何文本");
+        assertThat(document.getErrorMessage()).contains("未从 guide.pdf 中提取到任何文本");
         verify(documentChunkRepository, never()).saveAll(any());
     }
 
@@ -143,11 +146,11 @@ class DocumentIngestionServiceImplTest {
     void parseShouldWrapUnexpectedExtractionFailureIntoParsingException() {
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
         when(fileStorage.loadPath(STORAGE_KEY)).thenReturn(Path.of("broken.pdf"));
-        when(pdfTextExtractor.extract(any())).thenThrow(new IllegalStateException("磁盘读取失败"));
+        when(textExtractor.extract(any())).thenThrow(new IllegalStateException("磁盘读取失败"));
 
         assertThatThrownBy(() -> ingestionService.parse(documentId))
                 .isInstanceOf(DocumentParsingException.class)
-                .hasMessageContaining("解析 PDF 失败")
+                .hasMessageContaining("解析文档失败")
                 .hasRootCauseMessage("磁盘读取失败");
 
         assertThat(document.getParseStatus()).isEqualTo(DocumentParseStatus.FAILED);
@@ -157,7 +160,7 @@ class DocumentIngestionServiceImplTest {
     void parseShouldSkipChunkWhoseContentAlreadyExistsInKnowledgeBase() throws Exception {
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
         when(fileStorage.loadPath(STORAGE_KEY)).thenReturn(Path.of("stored.pdf"));
-        when(pdfTextExtractor.extract(any())).thenReturn(List.of(new PdfPage(1, PAGE_TEXT)));
+        when(textExtractor.extract(any())).thenReturn(List.of(new ExtractedPage(1, PAGE_TEXT)));
         // 同一知识库里已经有内容相同的分块，uk_knowledge_base_chunk_hash 会拒绝重复写入
         when(documentChunkRepository.findContentHashesByKnowledgeBaseId(knowledgeBaseId))
                 .thenReturn(Set.of(sha256(PAGE_TEXT)));

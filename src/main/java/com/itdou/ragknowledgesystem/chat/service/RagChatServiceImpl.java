@@ -63,10 +63,8 @@ public class RagChatServiceImpl implements RagChatService {
         // 空字符串等同于没传，统一成 null，后面只判断一次
         String conversationId = StringUtils.hasText(request.conversationId()) ? request.conversationId() : null;
 
-        log.info("收到提问 knowledgeBaseId={} conversationId={} topK={} 问题长度={}",
-                knowledgeBaseId, conversationId, request.topK(), request.question().length());
-        log.debug("提问原文: {}", request.question());
-
+        // 本轮不在开头打入口日志：结尾的「提问处理完成」已经带了会话、召回数和耗时，
+        // 失败的那一轮由全局异常出口记账，入口再补一条只会变成执行轨迹
         List<ConversationTurn> history = conversationId == null
                 ? List.of()
                 : conversationMemory.load(knowledgeBaseId, conversationId);
@@ -114,8 +112,6 @@ public class RagChatServiceImpl implements RagChatService {
 
     @Override
     public List<ChatMessageResponse> history(UUID knowledgeBaseId, String conversationId) {
-        log.debug("查询会话历史 knowledgeBaseId={} conversationId={}", knowledgeBaseId, conversationId);
-
         if (!knowledgeBaseRepository.existsById(knowledgeBaseId)) {
             throw new KnowledgeBaseNotFoundException(knowledgeBaseId);
         }
@@ -125,7 +121,7 @@ public class RagChatServiceImpl implements RagChatService {
                 .map(turn -> new ChatMessageResponse(turn.role(), turn.content()))
                 .toList();
 
-        log.info("查询会话历史完成 knowledgeBaseId={} conversationId={} 条数={}",
+        log.debug("查询会话历史 knowledgeBaseId={} conversationId={} 条数={}",
                 knowledgeBaseId, conversationId, messages.size());
         return messages;
     }

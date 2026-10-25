@@ -37,8 +37,7 @@ public class KeywordSearchServiceImpl implements KeywordSearchService {
             log.debug("问题里没有可用的关键词元，跳过关键词召回 knowledgeBaseId={}", knowledgeBaseId);
             return List.of();
         }
-        log.debug("关键词召回 knowledgeBaseId={} topK={} 词元={} 个", knowledgeBaseId, topK, terms.size());
-        log.debug("抽出的词元: {}", terms);
+        log.debug("关键词召回 knowledgeBaseId={} topK={} 词元={}", knowledgeBaseId, topK, terms);
 
         String termLiteral = String.join(TERM_SEPARATOR, terms);
         List<ChunkSearchProjection> hits = documentChunkRepository

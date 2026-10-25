@@ -62,7 +62,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
         try {
             return embeddingModel.embed(query);
         } catch (RuntimeException exception) {
-            log.error("检索问题向量化失败", exception);
+            // 堆栈统一由 GlobalExceptionHandler 打，这里只负责转换成 503 的业务异常
             throw new EmbeddingFailedException("检索问题向量化失败: " + exception.getMessage(), exception);
         }
     }

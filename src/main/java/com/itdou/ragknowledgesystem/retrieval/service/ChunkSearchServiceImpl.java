@@ -50,9 +50,8 @@ public class ChunkSearchServiceImpl implements ChunkSearchService {
         int topK = request.topK() == null ? DEFAULT_TOP_K : request.topK();
 
         long startedAt = System.currentTimeMillis();
-        log.info("检索开始 knowledgeBaseId={} mode={} topK={} 问题长度={}",
-                knowledgeBaseId, mode, topK, request.query().length());
-        log.debug("检索问题原文: {}", request.query());
+        log.debug("检索 knowledgeBaseId={} mode={} topK={} 问题原文={}",
+                knowledgeBaseId, mode, topK, request.query());
 
         List<SearchResultResponse> results = switch (mode) {
             case VECTOR -> vectorSearchService.search(knowledgeBaseId, request);

@@ -1,6 +1,6 @@
 package com.itdou.ragknowledgesystem.ingestion.chunk;
 
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfPage;
+import com.itdou.ragknowledgesystem.ingestion.parser.ExtractedPage;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,13 +20,13 @@ class TokenChunkSplitterTest {
     @Test
     void shouldReturnNoChunkWhenThereIsNoText() {
         assertThat(splitter.split(List.of())).isEmpty();
-        assertThat(splitter.split(List.of(new PdfPage(1, "")))).isEmpty();
-        assertThat(splitter.split(List.of(new PdfPage(1, "   \n  ")))).isEmpty();
+        assertThat(splitter.split(List.of(new ExtractedPage(1, "")))).isEmpty();
+        assertThat(splitter.split(List.of(new ExtractedPage(1, "   \n  ")))).isEmpty();
     }
 
     @Test
     void shouldKeepShortPageInASingleChunk() {
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, "第一行\n第二行")));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, "第一行\n第二行")));
 
         assertThat(drafts).hasSize(1);
         DocumentChunkDraft draft = drafts.get(0);
@@ -41,7 +41,7 @@ class TokenChunkSplitterTest {
 
     @Test
     void shouldSplitLongTextIntoMultipleChunks() {
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, repeatLines(40))));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, repeatLines(40))));
 
         assertThat(drafts).hasSizeGreaterThan(1);
         // 尾块并回上一块会略微超出目标大小，这里给出 1.5 倍的上界
@@ -51,7 +51,7 @@ class TokenChunkSplitterTest {
 
     @Test
     void shouldNumberChunksSequentiallyFromZero() {
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, repeatLines(40))));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, repeatLines(40))));
 
         assertThat(drafts).extracting(DocumentChunkDraft::chunkIndex)
                 .containsExactlyElementsOf(IntStream.range(0, drafts.size()).boxed().toList());
@@ -60,7 +60,7 @@ class TokenChunkSplitterTest {
     // 相邻分块必须重叠：下一块的首行应该能在上一块里找到
     @Test
     void shouldOverlapAdjacentChunks() {
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, repeatLines(40))));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, repeatLines(40))));
 
         assertThat(drafts).hasSizeGreaterThan(1);
         for (int index = 1; index < drafts.size(); index++) {
@@ -72,8 +72,8 @@ class TokenChunkSplitterTest {
     @Test
     void shouldKeepPageNumbersOrderedAcrossPages() {
         List<DocumentChunkDraft> drafts = splitter.split(List.of(
-                new PdfPage(1, repeatLines(20)),
-                new PdfPage(2, repeatLines(20))
+                new ExtractedPage(1, repeatLines(20)),
+                new ExtractedPage(2, repeatLines(20))
         ));
 
         assertThat(drafts).hasSizeGreaterThan(1);
@@ -90,7 +90,7 @@ class TokenChunkSplitterTest {
     void shouldHardSplitSingleLineLongerThanTarget() {
         String hugeLine = "alpha beta gamma delta epsilon ".repeat(60);
 
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, hugeLine)));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, hugeLine)));
 
         assertThat(drafts).hasSizeGreaterThan(1);
         assertThat(drafts).allSatisfy(draft ->
@@ -99,7 +99,7 @@ class TokenChunkSplitterTest {
 
     @Test
     void shouldNotLeaveAFragmentAsTheLastChunk() {
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, repeatLines(40))));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, repeatLines(40))));
 
         if (drafts.size() > 1) {
             assertThat(drafts.get(drafts.size() - 1).tokenCount()).isGreaterThanOrEqualTo(MIN_CHUNK_TOKENS);
@@ -108,7 +108,7 @@ class TokenChunkSplitterTest {
 
     @Test
     void shouldNotContainBlankLinesInChunkContent() {
-        List<DocumentChunkDraft> drafts = splitter.split(List.of(new PdfPage(1, "第一行\n\n\n第二行\n\n第三行")));
+        List<DocumentChunkDraft> drafts = splitter.split(List.of(new ExtractedPage(1, "第一行\n\n\n第二行\n\n第三行")));
 
         assertThat(drafts).hasSize(1);
         assertThat(drafts.get(0).content()).isEqualTo("第一行\n第二行\n第三行");

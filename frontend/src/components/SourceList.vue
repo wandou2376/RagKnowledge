@@ -4,7 +4,7 @@
     <div class="source-details">
       <div class="sources-head"><span>查看原文，核对回答依据</span><button class="toggle" type="button" @click="showAll = !showAll">{{ showAll ? '只看被引用' : '显示全部召回' }}</button></div>
       <article v-for="source in visibleSources" :key="source.index" class="source" :class="{ uncited: !source.cited }">
-        <button class="source-head" :aria-expanded="expanded.has(source.index)" @click="toggle(source.index)"><span class="index">{{ source.index }}</span><AgentIcon name="file" /><span class="file">{{ source.originalFileName }}</span><span class="meta">{{ formatPages(source.pageNumberStart, source.pageNumberEnd) }}</span><AgentIcon name="down" :class="{ rotated: expanded.has(source.index) }" /></button>
+        <button class="source-head" :aria-expanded="expanded.has(source.index)" @click="toggle(source.index)"><span class="index">{{ source.index }}</span><AgentIcon name="file" /><span class="file">{{ source.originalFileName }}</span><span class="meta">{{ formatPages(source.pageNumberStart, source.pageNumberEnd, source.originalFileName) }}</span><AgentIcon name="down" :class="{ rotated: expanded.has(source.index) }" /></button>
         <p class="snippet" :class="{ expanded: expanded.has(source.index) }">{{ source.content }}</p>
         <div class="source-foot"><span>{{ source.cited ? '回答已引用' : '仅召回，未引用' }}</span><span title="分数含义由检索模式决定，混合检索为 RRF 排名分，不是相似度百分比">检索分数 {{ formatScore(source.score) }}</span></div>
       </article>

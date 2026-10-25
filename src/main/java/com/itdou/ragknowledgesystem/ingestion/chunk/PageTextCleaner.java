@@ -1,6 +1,6 @@
 package com.itdou.ragknowledgesystem.ingestion.chunk;
 
-import com.itdou.ragknowledgesystem.ingestion.parser.PdfPage;
+import com.itdou.ragknowledgesystem.ingestion.parser.ExtractedPage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -23,9 +23,9 @@ public class PageTextCleaner {
     private static final Pattern INLINE_WHITESPACE = Pattern.compile("[ \\t\\u3000]+");
     private static final int HEADER_FOOTER_SCAN_LINES = 3;
 
-    public List<PdfPage> clean(List<PdfPage> pages, ChunkingProperties properties) {
+    public List<ExtractedPage> clean(List<ExtractedPage> pages, ChunkingProperties properties) {
         List<List<String>> pageLines = new ArrayList<>(pages.size());
-        for (PdfPage page : pages) {
+        for (ExtractedPage page : pages) {
             pageLines.add(normalizeLines(page.text()));
         }
 
@@ -35,7 +35,7 @@ public class PageTextCleaner {
 
         Set<String> boilerplate = detectBoilerplate(pageLines, properties);
 
-        List<PdfPage> cleaned = new ArrayList<>(pages.size());
+        List<ExtractedPage> cleaned = new ArrayList<>(pages.size());
         int cleanedChars = 0;
         for (int index = 0; index < pages.size(); index++) {
             List<String> kept = new ArrayList<>();
@@ -47,10 +47,11 @@ public class PageTextCleaner {
             }
             String text = String.join("\n", kept);
             cleanedChars += text.length();
-            cleaned.add(new PdfPage(pages.get(index).pageNumber(), text));
+            cleaned.add(new ExtractedPage(pages.get(index).pageNumber(), text));
         }
 
-        log.info("文本清洗完成 总页数={} 识别为重复页眉页脚 {} 种 字符数 {} -> {}",
+        // 清洗的汇总量记 debug：业务层已经有一条「文档解析完成」，那里不该再重复这一份数字
+        log.debug("文本清洗完成 总页数={} 识别为重复页眉页脚 {} 种 字符数 {} -> {}",
                 pages.size(), boilerplate.size(), rawChars, cleanedChars);
         return cleaned;
     }
